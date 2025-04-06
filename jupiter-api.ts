@@ -100,14 +100,23 @@ export function setupJupiterAPI(requestsPerSecond = 5): JupiterAPI {
         }
 
         const data = await response.json();
+        console.log('API response structure:', JSON.stringify(data, null, 2).substring(0, 200) + '...');
+
+        // Handle different possible response structures
+        const routes = data.data || data.routes || [];
+
+        if (!Array.isArray(routes)) {
+          console.error('Unexpected response format:', data);
+          return { routesInfos: [] };
+        }
 
         // Transform API response to expected format
         return {
-          routesInfos: data.data.map((route: any) => ({
+          routesInfos: routes.map((route: any) => ({
             ...route,
-            outAmount: BigInt(route.outAmount),
-            amount: BigInt(route.inAmount),
-            otherAmountThreshold: BigInt(route.otherAmountThreshold),
+            outAmount: BigInt(route.outAmount || 0),
+            amount: BigInt(route.inAmount || route.amount || 0),
+            otherAmountThreshold: BigInt(route.otherAmountThreshold || 0),
           })),
           contextSlot: data.contextSlot,
         };

@@ -16,7 +16,7 @@ export class BirdeyeFetcher {
   private apiKey: string;
   private cacheDir: string;
   private cacheTime: number;
-  private baseUrl = 'https://public-api.birdeye.so';
+  private baseUrl = 'https://public-api.birdeye.so/public';  // Updated base URL with 'public' path
 
   constructor(apiKey: string, cacheDir: string, cacheTime: number = 3600000) {
     this.apiKey = apiKey;
@@ -59,8 +59,11 @@ export class BirdeyeFetcher {
         return this.getDefaultTokens();
       }
 
-      // Fetch from Birdeye API
-      const url = `${this.baseUrl}/defi/token_list_all?sort_by=v24hUSD&sort_type=desc&offset=0&limit=${limit}`;
+      // Updated endpoint for token list
+      const url = `${this.baseUrl}/token_list?sort_by=v24hUSD&sort_type=desc&offset=0&limit=${limit}`;
+
+      console.log(`Fetching tokens from: ${url}`);
+
       const response = await fetch(url, {
         headers: {
           'X-API-KEY': this.apiKey
@@ -73,12 +76,16 @@ export class BirdeyeFetcher {
 
       const data = await response.json();
 
-      if (!data.success || !data.data || !Array.isArray(data.data.tokens)) {
+      // Check the actual structure of the response data
+      console.log('Response structure:', JSON.stringify(data).substring(0, 200) + '...');
+
+      if (!data.success || !data.data || !Array.isArray(data.data)) {
+        console.error('Unexpected API response format:', JSON.stringify(data).substring(0, 500));
         throw new Error('Invalid response from Birdeye API');
       }
 
       // Transform to our token data format
-      const tokens: TokenData[] = data.data.tokens.map((token: any) => ({
+      const tokens: TokenData[] = data.data.map((token: any) => ({
         symbol: token.symbol || 'UNKNOWN',
         name: token.name || 'Unknown Token',
         mint: token.address,
@@ -115,5 +122,30 @@ export class BirdeyeFetcher {
     ];
 
     return defaultTokens;
+  }
+
+  // Utility method to test the API connection
+  async testApiConnection(): Promise<boolean> {
+    try {
+      const url = `${this.baseUrl}/token_list?limit=1`;
+      const response = await fetch(url, {
+        headers: {
+          'X-API-KEY': this.apiKey
+        }
+      });
+
+      console.log(`API test status: ${response.status} ${response.statusText}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('API test response:', JSON.stringify(data).substring(0, 200));
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('API connection test failed:', error);
+      return false;
+    }
   }
 }
