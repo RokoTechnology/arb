@@ -139,25 +139,24 @@ export class TriangularScanner {
     };
   }
 
-  // Scan for arbitrage opportunities
-  async scanForOpportunities() {
+  // Scan for arbitrage opportunities with a specific amount
+  async scanForOpportunities(tradeSize?: number): Promise<boolean> {
     const logger = this.getLogger();
     this.scanCount++;
     logger.info(`Scan #${this.scanCount} - Looking for triangular arbitrage opportunities`);
 
-    // Refresh token list if needed (once per day)
-    const now = Date.now();
-    if (now - this.lastScanTime > this.config.triangleScanner.tokenCacheTime) {
-      await this.refreshTokenList();
-      this.lastScanTime = now;
-    }
+    // Clear previous opportunities
+    this.opportunities = [];
+
+    // Use provided trade size or default from config
+    const tradeSizeToUse = tradeSize || this.config.arbitrage.maxTradeSize;
 
     // Generate routes to scan
     const routes = this.generateTriangularRoutes();
     logger.debug(`Generated ${routes.length} triangular routes to scan`);
 
     // Calculate trade size in lamports (SOL's smallest unit)
-    const tradeSize = this.config.arbitrage.maxTradeSize * 10 ** this.solToken.decimals;
+    const tradeSizeInLamports = tradeSizeToUse * 10 ** this.solToken.decimals;
 
     let scannedRoutes = 0;
     let profitableRoutes = 0;
@@ -189,7 +188,7 @@ export class TriangularScanner {
         const step1Result = await this.jupiterApi.computeRoutes({
           inputMint: new PublicKey(inputMint),
           outputMint: new PublicKey(middleMint),
-          amount: tradeSize,
+          amount: tradeSizeInLamports,
           slippageBps: this.config.arbitrage.slippageTolerance * 100, // Convert decimal to basis points
         });
 
@@ -218,14 +217,14 @@ export class TriangularScanner {
         const finalAmount = bestStep2.outAmount; // In SOL's smallest units
 
         // Calculate profit
-        const startAmountNumber = Number(tradeSize);
+        const startAmountNumber = Number(tradeSizeInLamports);
         const endAmountNumber = Number(finalAmount);
 
         const profit = (endAmountNumber - startAmountNumber) / (10 ** this.solToken.decimals);
-        const profitPercentage = ((endAmountNumber / startAmountNumber) - 1);
+        const profitPercentage = ((endAmountNumber / startAmountNumber) - 1) * 100; // Convert to percentage
 
-        // Log profitable routes - using same threshold as main arbitrage bot
-        if (profitPercentage > this.config.arbitrage.minimumProfitThreshold) {
+        // Check if profitable above threshold
+        if (profitPercentage > this.config.arbitrage.minimumProfitThreshold * 100) {
           profitableRoutes++;
 
           const opportunity: Opportunity = {
@@ -235,21 +234,25 @@ export class TriangularScanner {
               middleToken.symbol,
               inputToken.symbol
             ],
-            startAmount: this.config.arbitrage.maxTradeSize,
+            startAmount: tradeSizeToUse,
             endAmount: endAmountNumber / (10 ** this.solToken.decimals),
             profit: profit,
-            profitPercentage: profitPercentage * 100, // Convert to percentage for display
+            profitPercentage: profitPercentage,
             timestamp: Date.now(),
             steps: [
               {
                 inputMint,
                 outputMint: middleMint,
+                inputAmount: tradeSizeToUse,
+                outputAmount: Number(middleAmount) / (10 ** middleToken.decimals),
                 route: bestStep1,
                 dex: bestStep1.marketInfos?.[0]?.amm?.label || 'Unknown',
               },
               {
                 inputMint: middleMint,
                 outputMint,
+                inputAmount: Number(middleAmount) / (10 ** middleToken.decimals),
+                outputAmount: endAmountNumber / (10 ** this.solToken.decimals),
                 route: bestStep2,
                 dex: bestStep2.marketInfos?.[0]?.amm?.label || 'Unknown',
               }
@@ -260,16 +263,11 @@ export class TriangularScanner {
 
           logger.info(`💰 PROFITABLE OPPORTUNITY FOUND:`);
           logger.info(`Route: ${opportunity.routeSymbols.join(' -> ')}`);
-          logger.info(`Profit: ${profit.toFixed(6)} SOL (${(profitPercentage * 100).toFixed(2)}%)`);
+          logger.info(`Profit: ${profit.toFixed(6)} SOL (${profitPercentage.toFixed(2)}%)`);
           logger.info(`DEXes: ${opportunity.steps.map(s => s.dex).join(' -> ')}`);
 
           // Save opportunity to file
           this.saveOpportunity(opportunity);
-
-          // Send alert if configured and above threshold
-          if (this.config.monitoring.alertOnProfit && profit > this.config.monitoring.profitAlertThreshold) {
-            this.sendProfitAlert(opportunity);
-          }
         }
       } catch (error) {
         logger.debug(`Error scanning route ${route.join(' -> ')}:`, error);
@@ -280,6 +278,29 @@ export class TriangularScanner {
 
     // Return true if profitable opportunities were found
     return profitableRoutes > 0;
+  }
+
+  // Get the best opportunity (most profitable)
+  async getBestOpportunity(): Promise<Opportunity | null> {
+    if (this.opportunities.length === 0) {
+      return null;
+    }
+
+    // Sort opportunities by profit percentage (descending)
+    this.opportunities.sort((a, b) => b.profitPercentage - a.profitPercentage);
+
+    // Return the most profitable opportunity
+    return this.opportunities[0];
+  }
+
+  // Get all opportunities
+  async getAllOpportunities(): Promise<Opportunity[]> {
+    return [...this.opportunities];
+  }
+
+  // Get the number of routes scanned in the last run
+  getScannedRoutesCount(): number {
+    return this.scanCount;
   }
 
   // Save opportunity to file

@@ -1,11 +1,12 @@
-// arbitrage-bot.ts - Solana Arbitrage Bot with Paper Trading
-// Updated to use the direct Jupiter API
+// arbitrage-bot.ts - Solana Arbitrage Bot with Triangular Scanner
+// Updated to use the TriangularScanner for opportunity detection
 
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import * as fs from 'fs';
 import { config } from './config';
 import { PaperTrading } from './paper-trading';
 import { JupiterAPI, setupJupiterAPI } from './jupiter-api';
+import { TriangularScanner, Opportunity } from './triangular-scanner';
 
 // Initialize logger
 const createLogger = () => {
@@ -43,142 +44,21 @@ async function loadTokenList() {
   }
 }
 
-// Function to generate potential arbitrage routes
-function generateArbitrageRoutes(tokenMap: any) {
-  // Get major tokens for triangle arbitrage
-  const majorTokens = config.tokens.basePairs;
-
-  // Get a selection of other tokens with good liquidity
-  // In a real implementation, you would filter based on volume or liquidity
-  const secondaryTokens = Object.keys(tokenMap).slice(0, config.tokens.maxTokensToScan);
-
-  // Generate triangle arbitrage routes
-  const routes: string[][] = [];
-
-  // Always start with WSOL for simplicity
-  const startToken = 'So11111111111111111111111111111111111111112'; // WSOL
-
-  // Generate 2-hop routes (triangular arbitrage)
-  for (const token1 of majorTokens) {
-    if (token1 === startToken) continue;
-
-    for (const token2 of secondaryTokens) {
-      if (token2 === startToken || token2 === token1) continue;
-      if (config.tokens.tokenBlacklist.includes(token2)) continue;
-
-      routes.push([startToken, token1, token2, startToken]);
-    }
-  }
-
-  return routes;
-}
-
-// Function to find arbitrage opportunities
-async function findArbitrageOpportunities(
-  jupiterApi: JupiterAPI,
-  routes: string[][],
-  tokenMap: any,
-  startingAmount: number,
-  logger: any
-) {
-  let bestOpportunity = null;
-  let highestProfitPercentage = 0;
-
-  for (const route of routes) {
-    try {
-      let currentAmount = startingAmount;
-      const swapSteps = [];
-      let invalidRoute = false;
-
-      // Simulate each swap in the route
-      for (let i = 0; i < route.length - 1; i++) {
-        const inputMint = route[i];
-        const outputMint = route[i + 1];
-
-        // Get token decimals
-        const inputDecimals = tokenMap[inputMint]?.decimals || 9;
-
-        // Calculate amount in smallest units
-        const inputAmount = currentAmount * (10 ** inputDecimals);
-
-        // Compute route using Jupiter API
-        const routeInfo = await jupiterApi.computeRoutes({
-          inputMint: new PublicKey(inputMint),
-          outputMint: new PublicKey(outputMint),
-          amount: inputAmount,
-          slippageBps: config.arbitrage.slippageTolerance * 100, // Convert percentage to basis points
-        });
-
-        if (!routeInfo.routesInfos || routeInfo.routesInfos.length === 0) {
-          invalidRoute = true;
-          break;
-        }
-
-        const bestSwap = routeInfo.routesInfos[0];
-        const outputDecimals = tokenMap[outputMint]?.decimals || 9;
-
-        // Convert outAmount from BigInt to number
-        const outAmountBigInt = bestSwap.outAmount;
-        const outAmountNumber = Number(outAmountBigInt) / (10 ** outputDecimals);
-
-        const outputAmount = outAmountNumber;
-
-        currentAmount = outputAmount;
-        swapSteps.push({
-          inputMint,
-          outputMint,
-          inputAmount: currentAmount,
-          outputAmount,
-          route: bestSwap,
-          dex: bestSwap.marketInfos?.[0]?.amm?.label || 'Unknown',
-        });
-      }
-
-      if (invalidRoute) continue;
-
-      // Calculate profit
-      const profit = currentAmount - startingAmount;
-      const profitPercentage = (profit / startingAmount) * 100;
-
-      logger.debug(`Route ${route.map(t => tokenMap[t]?.symbol || t).join(' -> ')} - Profit: ${profit.toFixed(6)} SOL (${profitPercentage.toFixed(2)}%)`);
-
-      // Update best opportunity if this is more profitable
-      if (profitPercentage > highestProfitPercentage && profitPercentage > 0) {
-        highestProfitPercentage = profitPercentage;
-        bestOpportunity = {
-          route,
-          steps: swapSteps,
-          startAmount: startingAmount,
-          endAmount: currentAmount,
-          profit,
-          profitPercentage,
-          timeStamp: Date.now(),
-        };
-      }
-    } catch (error: any) {
-      logger.debug(`Error simulating route ${route.join(' -> ')}:`, error.message);
-      continue;
-    }
-  }
-
-  return bestOpportunity;
-}
-
 // Execute the arbitrage trade (or simulate with paper trading)
 async function executeArbitrage(
   jupiterApi: JupiterAPI,
-  opportunity: any,
+  opportunity: Opportunity,
   tokenMap: any,
   logger: any,
   paperTradingInstance?: any
 ) {
   try {
     logger.info('Executing arbitrage trade...');
-    logger.info(`Route: ${opportunity.route.map((t: string) => tokenMap[t]?.symbol || t).join(' -> ')}`);
+    logger.info(`Route: ${opportunity.routeSymbols.join(' -> ')}`);
     logger.info(`Expected profit: ${opportunity.profit.toFixed(6)} SOL (${opportunity.profitPercentage.toFixed(2)}%)`);
 
     // Check if opportunity is still fresh
-    const timeSinceDiscovery = Date.now() - opportunity.timeStamp;
+    const timeSinceDiscovery = Date.now() - opportunity.timestamp;
     if (timeSinceDiscovery > config.arbitrage.routeTimeout) {
       logger.warn(`Opportunity expired (${timeSinceDiscovery}ms old). Recalculating...`);
       return { success: false, reason: 'expired' };
@@ -197,7 +77,10 @@ async function executeArbitrage(
     let currentAmount = opportunity.startAmount;
 
     for (const step of opportunity.steps) {
-      logger.info(`Executing swap: ${tokenMap[step.inputMint]?.symbol || step.inputMint} -> ${tokenMap[step.outputMint]?.symbol || step.outputMint}`);
+      const inputSymbol = tokenMap[step.inputMint]?.symbol || step.inputMint;
+      const outputSymbol = tokenMap[step.outputMint]?.symbol || step.outputMint;
+
+      logger.info(`Executing swap: ${inputSymbol} -> ${outputSymbol}`);
 
       const result = await jupiterApi.exchange({
         routeInfo: step.route,
@@ -209,9 +92,6 @@ async function executeArbitrage(
 
       logger.info(`Swap complete. Transaction: ${result.txid}`);
     }
-
-    // Verify final balance and calculate actual profit
-    // In a real implementation, you would check the final token balance here
 
     logger.info(`Arbitrage complete!`);
 
@@ -268,7 +148,7 @@ function loadWallet(privateKeyPath: string): Keypair {
   }
 }
 
-// Main arbitrage monitoring function
+// Main arbitrage monitoring function - now using the TriangularScanner
 export async function monitorArbitrageOpportunities(connection: Connection, paperTradingInstance?: any) {
   const logger = createLogger();
 
@@ -286,9 +166,10 @@ export async function monitorArbitrageOpportunities(connection: Connection, pape
     const jupiterApi = setupJupiterAPI();
     logger.info('Jupiter API initialized successfully');
 
-    // Generate potential arbitrage routes
-    const routes = generateArbitrageRoutes(tokenMap);
-    logger.info(`Generated ${routes.length} potential arbitrage routes`);
+    // Initialize triangular scanner
+    const scanner = new TriangularScanner(connection, config);
+    await scanner.initialize(tokenMap);
+    logger.info('Triangular scanner initialized');
 
     // Get available balance
     const wsol = 'So11111111111111111111111111111111111111112';
@@ -309,16 +190,24 @@ export async function monitorArbitrageOpportunities(connection: Connection, pape
 
     logger.info(`Scanning for arbitrage opportunities with trade size: ${tradeSize} WSOL`);
 
-    // Find best opportunity
-    const opportunity = await findArbitrageOpportunities(jupiterApi, routes, tokenMap, tradeSize, logger);
+    // Use the scanner to scan for opportunities
+    const hasOpportunities = await scanner.scanForOpportunities(tradeSize);
 
-    if (!opportunity) {
+    if (!hasOpportunities) {
       logger.info('No profitable arbitrage opportunities found in this scan');
       return null;
     }
 
+    // Get the best opportunity from the scanner
+    const opportunity = await scanner.getBestOpportunity();
+
+    if (!opportunity) {
+      logger.info('No profitable arbitrage opportunities found after filtering');
+      return null;
+    }
+
     logger.info(`Found profitable opportunity!`);
-    logger.info(`Route: ${opportunity.route.map((t: string) => tokenMap[t]?.symbol || t).join(' -> ')}`);
+    logger.info(`Route: ${opportunity.routeSymbols.join(' -> ')}`);
     logger.info(`Expected profit: ${opportunity.profit.toFixed(6)} SOL (${opportunity.profitPercentage.toFixed(2)}%)`);
 
     // Check if opportunity meets minimum profit threshold
@@ -344,118 +233,47 @@ export async function simulateArbitrage(
 ) {
   console.log(`Simulating arbitrage starting with ${amount} of token ${startTokenMint.toString()}`);
 
-  // This is a simpler version of monitorArbitrageOpportunities focused on simulation
   try {
-    // Setup Jupiter API wrapper
-    const jupiterApi = setupJupiterAPI();
-    console.log('Jupiter API initialized for simulation');
-
     // Load token information
     const tokenMap = await loadTokenList();
 
-    // Generate a set of potential routes to try
-    const routes = [
-      // Triangle arbitrage routes (A -> B -> A)
-      [startTokenMint.toString(), 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', startTokenMint.toString()],
+    // Initialize triangular scanner
+    const scanner = new TriangularScanner(connection, config);
+    await scanner.initialize(tokenMap);
 
-      // In a real implementation, this would generate more routes
-      // based on token pairs with good liquidity
-    ];
+    // Set SOL mint as the starting token if not already
+    const solMint = 'So11111111111111111111111111111111111111112';
+    const simulationAmount = startTokenMint.toString() === solMint ? amount : 1; // Default to 1 SOL if non-SOL token
 
-    console.log(`Generated ${routes.length} routes to simulate`);
+    // Run simulation scan
+    const hasOpportunities = await scanner.scanForOpportunities(simulationAmount);
 
-    // Track profitable routes
-    const profitableRoutes = [];
-
-    // Simulate each route
-    for (const route of routes) {
-      try {
-        let currentAmount = amount;
-        const steps = [];
-        let invalidRoute = false;
-
-        console.log(`Simulating route: ${route.map(mint => tokenMap[mint]?.symbol || mint).join(' -> ')}`);
-
-        // Simulate each hop in the route
-        for (let i = 0; i < route.length - 1; i++) {
-          const inputMint = route[i];
-          const outputMint = route[i + 1];
-
-          // Get token decimals
-          const inputDecimals = tokenMap[inputMint]?.decimals || 9;
-
-          // Calculate amount in smallest units
-          const inputAmount = currentAmount * (10 ** inputDecimals);
-
-          // Compute route using Jupiter API
-          console.log(`  Computing route: ${tokenMap[inputMint]?.symbol || inputMint} -> ${tokenMap[outputMint]?.symbol || outputMint}`);
-          const routeInfo = await jupiterApi.computeRoutes({
-            inputMint: new PublicKey(inputMint),
-            outputMint: new PublicKey(outputMint),
-            amount: inputAmount,
-            slippageBps: 50, // 0.5%
-          });
-
-          if (!routeInfo.routesInfos || routeInfo.routesInfos.length === 0) {
-            console.log(`  No routes found for ${tokenMap[inputMint]?.symbol || inputMint} -> ${tokenMap[outputMint]?.symbol || outputMint}`);
-            invalidRoute = true;
-            break;
-          }
-
-          // Find best route
-          const bestSwap = routeInfo.routesInfos[0];
-          const outputDecimals = tokenMap[outputMint]?.decimals || 9;
-          const outputAmount = Number(bestSwap.outAmount) / (10 ** outputDecimals);
-
-          // Get DEX info
-          const dex = bestSwap.marketInfos?.[0]?.amm?.label || 'Unknown';
-
-          console.log(`  Swap on ${dex}: ${currentAmount.toFixed(6)} ${tokenMap[inputMint]?.symbol || inputMint} -> ${outputAmount.toFixed(6)} ${tokenMap[outputMint]?.symbol || outputMint}`);
-
-          currentAmount = outputAmount;
-          steps.push({
-            inputMint,
-            outputMint,
-            inputAmount,
-            outputAmount,
-            dex
-          });
-        }
-
-        if (invalidRoute) {
-          console.log('  Route invalid - skipping');
-          continue;
-        }
-
-        // Calculate profit
-        const profit = currentAmount - amount;
-        const profitPercentage = (profit / amount) * 100;
-
-        console.log(`  Result: ${amount.toFixed(6)} -> ${currentAmount.toFixed(6)}`);
-        console.log(`  Profit: ${profit.toFixed(6)} (${profitPercentage.toFixed(2)}%)`);
-
-        // Record if profitable
-        if (profit > 0) {
-          profitableRoutes.push({
-            route,
-            routeDescription: route.map(mint => tokenMap[mint]?.symbol || mint).join(' -> '),
-            startAmount: amount,
-            endAmount: currentAmount,
-            profit,
-            profitPercentage,
-            dexes: steps.map(step => step.dex),
-            steps
-          });
-        }
-
-      } catch (error: any) {
-        console.error(`Error simulating route:`, error.message);
-      }
+    if (!hasOpportunities) {
+      return {
+        simulatedRoutes: scanner.getScannedRoutesCount(),
+        profitableRoutes: [],
+        startToken: startTokenMint.toString(),
+        startAmount: amount,
+      };
     }
 
-    // Return simulation results
+    // Get all opportunities
+    const opportunities = await scanner.getAllOpportunities();
+
+    // Convert opportunities to the expected return format
+    const profitableRoutes = opportunities.map(opp => ({
+      route: opp.route,
+      routeDescription: opp.routeSymbols.join(' -> '),
+      startAmount: opp.startAmount,
+      endAmount: opp.endAmount,
+      profit: opp.profit,
+      profitPercentage: opp.profitPercentage,
+      dexes: opp.steps.map(step => step.dex || 'Unknown'),
+      steps: opp.steps
+    }));
+
     return {
-      simulatedRoutes: routes.length,
+      simulatedRoutes: scanner.getScannedRoutesCount(),
       profitableRoutes,
       startToken: startTokenMint.toString(),
       startAmount: amount,

@@ -1,112 +1,140 @@
-// jupiter-api.ts - Direct API wrapper for Jupiter
+// jupiter-api.ts - Wrapper for Jupiter API
 import { PublicKey } from '@solana/web3.js';
 
-// Jupiter API wrapper
-export class JupiterAPI {
-  private baseUrl: string;
-
-  constructor(apiVersion = 'v6') {
-    this.baseUrl = `https://quote-api.jup.ag/${apiVersion}`;
-  }
-
-  // Get swap routes
-  async getRoutes(params: {
-    inputMint: string;
-    outputMint: string;
-    amount: string; // Amount in smallest units (e.g. lamports)
-    slippageBps?: number;
-  }) {
-    try {
-      const url = new URL(`${this.baseUrl}/quote`);
-
-      // Add query parameters
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.append(key, value.toString());
-        }
-      });
-
-      // Set default slippage if not provided
-      if (!params.slippageBps) {
-        url.searchParams.append('slippageBps', '50'); // 0.5% default slippage
-      }
-
-      // Make API request
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error(`Jupiter API error: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting Jupiter routes:', error);
-      return null;
-    }
-  }
-
-  // Format the response to match the expected Jupiter SDK format
-  async computeRoutes(params: {
-    inputMint: PublicKey;
-    outputMint: PublicKey;
-    amount: number; // Amount in smallest units
-    slippageBps?: number;
-  }) {
-    const response = await this.getRoutes({
-      inputMint: params.inputMint.toString(),
-      outputMint: params.outputMint.toString(),
-      amount: params.amount.toString(),
-      slippageBps: params.slippageBps
-    });
-
-    if (!response || !response.data) {
-      return { routesInfos: [] };
-    }
-
-    // Map API response to SDK-like format
-    const routesInfos = response.data.map((route: any) => ({
-      outAmount: BigInt(route.outAmount),
-      inAmount: BigInt(route.inAmount),
-      priceImpactPct: route.priceImpactPct,
-      marketInfos: (route.marketInfos || []).map((market: any) => ({
-        amm: {
-          label: market.label || 'Unknown'
-        },
-        inputMint: market.inputMint,
-        outputMint: market.outputMint,
-        inAmount: market.inAmount,
-        outAmount: market.outAmount,
-        lpFee: market.lpFee
-      }))
-    }));
-
-    return { routesInfos };
-  }
-
-  // Paper trading swap simulation
-  async exchange({ routeInfo }: { routeInfo: any }) {
-    // In paper trading mode, just return a simulated transaction ID
-    return {
-      txid: `paper-trade-${Date.now()}`,
-      success: true
-    };
-  }
-
-  // For real trading, we would need to submit transactions
-  // This is a placeholder for future implementation
-  async createSwapTransaction(params: {
-    route: any;
-    userPublicKey: PublicKey;
-  }) {
-    // In a real implementation, this would call the Jupiter API to create a swap transaction
-    // For now, we're just simulating for paper trading
-    console.log('Would create real swap transaction here in production mode');
-    return {
-      swapTransaction: 'simulated-transaction'
-    };
-  }
+// Interface for Jupiter API
+export interface JupiterAPI {
+  computeRoutes(params: ComputeRoutesParams): Promise<ComputeRoutesResponse>;
+  exchange(params: ExchangeParams): Promise<ExchangeResponse>;
 }
 
-// Setup function that returns the Jupiter API wrapper
-export function setupJupiterAPI() {
-  return new JupiterAPI();
+// Parameter types
+interface ComputeRoutesParams {
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  amount: number | string | bigint;
+  slippageBps?: number;
+  feeBps?: number;
+  onlyDirectRoutes?: boolean;
+  maxAccounts?: number;
+}
+
+interface ExchangeParams {
+  routeInfo: any;
+  userPublicKey?: PublicKey;
+}
+
+// Response types
+interface ComputeRoutesResponse {
+  routesInfos: RouteInfo[];
+  contextSlot?: number;
+}
+
+interface RouteInfo {
+  outAmount: bigint;
+  marketInfos: any[];
+  amount: bigint;
+  slippageBps: number;
+  otherAmountThreshold: bigint;
+  swapMode: string;
+  priceImpactPct: number;
+  [key: string]: any;
+}
+
+interface ExchangeResponse {
+  txid?: string;
+  error?: string;
+  [key: string]: any;
+}
+
+// Setup Jupiter API with rate limiting
+export function setupJupiterAPI(requestsPerSecond = 5): JupiterAPI {
+  // Basic rate limiting
+  const minInterval = 1000 / requestsPerSecond;
+  let lastRequestTime = 0;
+
+  const getRateLimit = async () => {
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+
+    if (elapsed < minInterval) {
+      await new Promise(resolve => setTimeout(resolve, minInterval - elapsed));
+    }
+
+    lastRequestTime = Date.now();
+  };
+
+  // Create Jupiter API instance
+  return {
+    async computeRoutes(params: ComputeRoutesParams): Promise<ComputeRoutesResponse> {
+      await getRateLimit();
+
+      try {
+        // Build API URL with query parameters
+        const url = new URL('https://quote-api.jup.ag/v6/quote');
+
+        url.searchParams.append('inputMint', params.inputMint.toString());
+        url.searchParams.append('outputMint', params.outputMint.toString());
+        url.searchParams.append('amount', params.amount.toString());
+
+        if (params.slippageBps !== undefined) {
+          url.searchParams.append('slippageBps', params.slippageBps.toString());
+        }
+
+        if (params.feeBps !== undefined) {
+          url.searchParams.append('feeBps', params.feeBps.toString());
+        }
+
+        if (params.onlyDirectRoutes !== undefined) {
+          url.searchParams.append('onlyDirectRoutes', params.onlyDirectRoutes.toString());
+        }
+
+        if (params.maxAccounts !== undefined) {
+          url.searchParams.append('maxAccounts', params.maxAccounts.toString());
+        }
+
+        // Make API request
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error(`Jupiter API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Transform API response to expected format
+        return {
+          routesInfos: data.data.map((route: any) => ({
+            ...route,
+            outAmount: BigInt(route.outAmount),
+            amount: BigInt(route.inAmount),
+            otherAmountThreshold: BigInt(route.otherAmountThreshold),
+          })),
+          contextSlot: data.contextSlot,
+        };
+      } catch (error) {
+        console.error('Error computing routes:', error);
+        return { routesInfos: [] };
+      }
+    },
+
+    async exchange(params: ExchangeParams): Promise<ExchangeResponse> {
+      await getRateLimit();
+
+      try {
+        // In a real implementation, this would call the Jupiter swap API
+        // For paper trading/simulation, we'll just return a mock response
+
+        // Simulate network latency
+        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+
+        // Generate a fake transaction ID
+        const txid = 'sim' + Math.random().toString(36).substring(2, 15);
+
+        return { txid };
+      } catch (error) {
+        console.error('Error executing exchange:', error);
+        return { error: (error as Error).message };
+      }
+    },
+  };
 }

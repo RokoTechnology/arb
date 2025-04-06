@@ -1,4 +1,4 @@
-// config.ts - Direct Configuration for Solana Arbitrage Bot
+// config.ts - Configuration for Solana Arbitrage Bot with Triangular Scanner
 
 import { Connection } from '@solana/web3.js';
 
@@ -33,7 +33,7 @@ export interface ArbConfig {
     basePairs: string[]; // Base token pairs to use for arbitrage (e.g. WSOL, USDC)
     maxTokensToScan: number; // Maximum number of tokens to include in scanning
     tokenBlacklist: string[]; // Token addresses to exclude
-    solMint: string; // SOL token mint address (for triangular routes)
+    solMint: string; // SOL mint address
   };
 
   // DEX settings
@@ -81,24 +81,18 @@ export interface ArbConfig {
     minTransactionValue: number;
   };
 
-  // Triangular arbitrage scanner settings
+  // Triangular scanner settings
   triangleScanner: {
     enabled: boolean;
-    requestInterval: number; // Milliseconds between API requests (rate limiting)
-    reportDir: string; // Directory for opportunity reports
-    tokenCacheTime: number; // Milliseconds to cache token list
-    birdeyeApiKey?: string; // API key for Birdeye
-  };
-
-  // API keys
-  apis: {
-    birdeyeApiKey?: string; // Birdeye API key
-    heliusKey?: string; // Helius API key
+    reportDir: string;
+    tokenCacheTime: number;
+    requestInterval: number;
+    birdeyeApiKey?: string;
+    maxRoutesPerScan: number;
   };
 }
 
 const HELIUS_KEY = process.env.HELIUS_KEY || '43cc204e-ea49-4017-8623-123f776557de'
-const BIRDEYE_KEY = process.env.BIRDEYE_API_KEY || ''
 
 // Direct configuration
 export const config: ArbConfig = {
@@ -133,7 +127,7 @@ export const config: ArbConfig = {
     tokenBlacklist: [
       // Add any tokens you want to exclude here
     ],
-    solMint: 'So11111111111111111111111111111111111111112', // SOL token address
+    solMint: 'So11111111111111111111111111111111111111112',
   },
 
   dexes: {
@@ -188,19 +182,14 @@ export const config: ArbConfig = {
     minTransactionValue: 1000, // Minimum transaction value to monitor (in USD)
   },
 
-  // New triangular arbitrage scanner settings
+  // Triangular scanner settings
   triangleScanner: {
-    enabled: process.env.TRIANGLE_SCANNER_ENABLED === 'true' || true,
-    requestInterval: 2000, // 2 seconds between API requests (to avoid rate limits)
-    reportDir: './triangle-reports',
-    tokenCacheTime: 24 * 60 * 60 * 1000, // 24 hours cache lifetime
-    birdeyeApiKey: BIRDEYE_KEY,
-  },
-
-  // API keys
-  apis: {
-    birdeyeApiKey: BIRDEYE_KEY,
-    heliusKey: HELIUS_KEY,
+    enabled: true, // Enable triangular scanner by default
+    reportDir: './arbitrage-reports',
+    tokenCacheTime: 86400000, // 24 hours in milliseconds
+    requestInterval: 200, // 200ms between requests to avoid rate limits
+    maxRoutesPerScan: 100, // Maximum routes to scan per iteration
+    birdeyeApiKey: process.env.BIRDEYE_API_KEY || '', // Optional Birdeye API key for token data
   },
 };
 
