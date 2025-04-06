@@ -1,18 +1,30 @@
 {
-  "name": "arb",
-  "module": "main.ts",
+  "name": "solana-arbitrage-bot",
+  "version": "1.0.0",
+  "description": "A Solana arbitrage bot that detects and executes profitable trading opportunities",
   "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
+  "scripts": {
+    "start": "bun main.ts",
+    "build": "bun build --target=bun ./main.ts --outdir=./dist",
+    "lint": "eslint . --ext .ts"
   },
   "dependencies": {
-    "@jup-ag/core": "^4.0.0-beta.21",
-    "@solana/spl-token": "^0.4.13",
+    "@solana/spl-token": "^0.3.8",
     "@solana/spl-token-registry": "^0.2.4574",
-    "@solana/web3.js": "^1.98.0",
-    "commander": "^13.1.0"
+    "@solana/web3.js": "^1.87.1",
+    "commander": "^10.0.1",
+    "dotenv": "^16.0.3",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.16.3",
+    "@types/ws": "^8.5.4",
+    "@typescript-eslint/eslint-plugin": "^5.59.2",
+    "@typescript-eslint/parser": "^5.59.2",
+    "eslint": "^8.39.0",
+    "typescript": "^5.0.4"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

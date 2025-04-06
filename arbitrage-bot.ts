@@ -1,11 +1,11 @@
 // arbitrage-bot.ts - Solana Arbitrage Bot with Paper Trading
-// Cleaned version without flash loan code and unnecessary imports
+// Updated to use the direct Jupiter API
 
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { Jupiter } from '@jup-ag/core';
 import * as fs from 'fs';
 import { config } from './config';
 import { PaperTrading } from './paper-trading';
+import { JupiterAPI, setupJupiterAPI } from './jupiter-api';
 
 // Initialize logger
 const createLogger = () => {
@@ -43,21 +43,6 @@ async function loadTokenList() {
   }
 }
 
-// Setup Jupiter for best swap routes
-async function setupJupiter(connection: Connection, wallet: PublicKey) {
-  try {
-    const jupiter = await Jupiter.load({
-      connection,
-      cluster: 'mainnet-beta',
-      user: wallet,
-    });
-    return jupiter;
-  } catch (error) {
-    console.error('Error setting up Jupiter:', error);
-    throw new Error('Failed to initialize Jupiter. Check your connection.');
-  }
-}
-
 // Function to generate potential arbitrage routes
 function generateArbitrageRoutes(tokenMap: any) {
   // Get major tokens for triangle arbitrage
@@ -90,7 +75,7 @@ function generateArbitrageRoutes(tokenMap: any) {
 
 // Function to find arbitrage opportunities
 async function findArbitrageOpportunities(
-  jupiter: any,
+  jupiterApi: JupiterAPI,
   routes: string[][],
   tokenMap: any,
   startingAmount: number,
@@ -116,8 +101,8 @@ async function findArbitrageOpportunities(
         // Calculate amount in smallest units
         const inputAmount = currentAmount * (10 ** inputDecimals);
 
-        // Compute route using Jupiter
-        const routeInfo = await jupiter.computeRoutes({
+        // Compute route using Jupiter API
+        const routeInfo = await jupiterApi.computeRoutes({
           inputMint: new PublicKey(inputMint),
           outputMint: new PublicKey(outputMint),
           amount: inputAmount,
@@ -131,7 +116,12 @@ async function findArbitrageOpportunities(
 
         const bestSwap = routeInfo.routesInfos[0];
         const outputDecimals = tokenMap[outputMint]?.decimals || 9;
-        const outputAmount = bestSwap.outAmount / (10 ** outputDecimals);
+
+        // Convert outAmount from BigInt to number
+        const outAmountBigInt = bestSwap.outAmount;
+        const outAmountNumber = Number(outAmountBigInt) / (10 ** outputDecimals);
+
+        const outputAmount = outAmountNumber;
 
         currentAmount = outputAmount;
         swapSteps.push({
@@ -176,7 +166,7 @@ async function findArbitrageOpportunities(
 
 // Execute the arbitrage trade (or simulate with paper trading)
 async function executeArbitrage(
-  jupiter: any,
+  jupiterApi: JupiterAPI,
   opportunity: any,
   tokenMap: any,
   logger: any,
@@ -197,7 +187,7 @@ async function executeArbitrage(
     // Paper trading mode - delegate to paper trading handler
     if (config.paperTrading.enabled && paperTradingInstance) {
       logger.info('Paper trading mode active - simulating trade execution');
-      return await paperTradingInstance.executeTrade(opportunity, jupiter);
+      return await paperTradingInstance.executeTrade(opportunity, jupiterApi);
     }
 
     // Real trading execution
@@ -209,7 +199,7 @@ async function executeArbitrage(
     for (const step of opportunity.steps) {
       logger.info(`Executing swap: ${tokenMap[step.inputMint]?.symbol || step.inputMint} -> ${tokenMap[step.outputMint]?.symbol || step.outputMint}`);
 
-      const result = await jupiter.exchange({
+      const result = await jupiterApi.exchange({
         routeInfo: step.route,
       });
 
@@ -292,9 +282,9 @@ export async function monitorArbitrageOpportunities(connection: Connection, pape
       ? new PublicKey('11111111111111111111111111111111') // Dummy wallet for paper trading
       : loadWallet(config.wallet.privateKeyPath).publicKey; // Real wallet for actual trades
 
-    // Setup Jupiter instance
-    const jupiter = await setupJupiter(connection, walletPublicKey);
-    logger.info('Jupiter initialized successfully');
+    // Setup Jupiter API wrapper
+    const jupiterApi = setupJupiterAPI();
+    logger.info('Jupiter API initialized successfully');
 
     // Generate potential arbitrage routes
     const routes = generateArbitrageRoutes(tokenMap);
@@ -320,7 +310,7 @@ export async function monitorArbitrageOpportunities(connection: Connection, pape
     logger.info(`Scanning for arbitrage opportunities with trade size: ${tradeSize} WSOL`);
 
     // Find best opportunity
-    const opportunity = await findArbitrageOpportunities(jupiter, routes, tokenMap, tradeSize, logger);
+    const opportunity = await findArbitrageOpportunities(jupiterApi, routes, tokenMap, tradeSize, logger);
 
     if (!opportunity) {
       logger.info('No profitable arbitrage opportunities found in this scan');
@@ -338,7 +328,7 @@ export async function monitorArbitrageOpportunities(connection: Connection, pape
     }
 
     // Execute the arbitrage (real or paper)
-    return await executeArbitrage(jupiter, opportunity, tokenMap, logger, paperTradingInstance);
+    return await executeArbitrage(jupiterApi, opportunity, tokenMap, logger, paperTradingInstance);
 
   } catch (error) {
     logger.error('Error monitoring arbitrage opportunities:', error);
@@ -356,14 +346,9 @@ export async function simulateArbitrage(
 
   // This is a simpler version of monitorArbitrageOpportunities focused on simulation
   try {
-    // Setup Jupiter instance
-    const jupiter = await Jupiter.load({
-      connection,
-      cluster: 'mainnet-beta',
-      user: new PublicKey('11111111111111111111111111111111'), // Dummy wallet for simulation
-    });
-
-    console.log('Jupiter initialized for simulation');
+    // Setup Jupiter API wrapper
+    const jupiterApi = setupJupiterAPI();
+    console.log('Jupiter API initialized for simulation');
 
     // Load token information
     const tokenMap = await loadTokenList();
@@ -402,9 +387,9 @@ export async function simulateArbitrage(
           // Calculate amount in smallest units
           const inputAmount = currentAmount * (10 ** inputDecimals);
 
-          // Compute route using Jupiter
+          // Compute route using Jupiter API
           console.log(`  Computing route: ${tokenMap[inputMint]?.symbol || inputMint} -> ${tokenMap[outputMint]?.symbol || outputMint}`);
-          const routeInfo = await jupiter.computeRoutes({
+          const routeInfo = await jupiterApi.computeRoutes({
             inputMint: new PublicKey(inputMint),
             outputMint: new PublicKey(outputMint),
             amount: inputAmount,
@@ -420,7 +405,7 @@ export async function simulateArbitrage(
           // Find best route
           const bestSwap = routeInfo.routesInfos[0];
           const outputDecimals = tokenMap[outputMint]?.decimals || 9;
-          const outputAmount = bestSwap.outAmount / (10 ** outputDecimals);
+          const outputAmount = Number(bestSwap.outAmount) / (10 ** outputDecimals);
 
           // Get DEX info
           const dex = bestSwap.marketInfos?.[0]?.amm?.label || 'Unknown';

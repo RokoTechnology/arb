@@ -7,7 +7,7 @@ export interface ArbConfig {
   // Connection settings
   rpc: {
     heliusRpcUrl: string;
-    wsEndpoint?: string;
+    heliusWsUrl: string;
     commitment: 'processed' | 'confirmed' | 'finalized';
     timeout: number;
   };
@@ -33,6 +33,7 @@ export interface ArbConfig {
     basePairs: string[]; // Base token pairs to use for arbitrage (e.g. WSOL, USDC)
     maxTokensToScan: number; // Maximum number of tokens to include in scanning
     tokenBlacklist: string[]; // Token addresses to exclude
+    solMint: string; // SOL token mint address (for triangular routes)
   };
 
   // DEX settings
@@ -70,15 +71,40 @@ export interface ArbConfig {
     cacheTimeout: number;
     maxRouteDepth: number; // Maximum number of hops in a route
   };
+
+  // Mempool monitoring settings
+  mempool: {
+    enabled: boolean;
+    transactionTypes: string[];
+    filterByToken: boolean;
+    targetTokens: string[];
+    minTransactionValue: number;
+  };
+
+  // Triangular arbitrage scanner settings
+  triangleScanner: {
+    enabled: boolean;
+    requestInterval: number; // Milliseconds between API requests (rate limiting)
+    reportDir: string; // Directory for opportunity reports
+    tokenCacheTime: number; // Milliseconds to cache token list
+    birdeyeApiKey?: string; // API key for Birdeye
+  };
+
+  // API keys
+  apis: {
+    birdeyeApiKey?: string; // Birdeye API key
+    heliusKey?: string; // Helius API key
+  };
 }
 
-const HELIUS_KEY = process.env.HELIUS_KEY || 'helius-key-missing'
+const HELIUS_KEY = process.env.HELIUS_KEY || '43cc204e-ea49-4017-8623-123f776557de'
+const BIRDEYE_KEY = process.env.BIRDEYE_API_KEY || ''
 
 // Direct configuration
 export const config: ArbConfig = {
   rpc: {
     heliusRpcUrl: 'https://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
-    wsEndpoint: 'wss://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
+    heliusWsUrl: 'wss://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
     commitment: 'confirmed',
     timeout: 30000,
   },
@@ -89,12 +115,12 @@ export const config: ArbConfig = {
   },
 
   arbitrage: {
-    minimumProfitThreshold: parseFloat(process.env.MIN_PROFIT_THRESHOLD || '0.008'), // 0.8%
+    minimumProfitThreshold: parseFloat(process.env.MIN_PROFIT_THRESHOLD || '0.003'), // 0.3%
     maxTradeSize: parseFloat(process.env.MAX_TRADE_SIZE || '10'), // 10 SOL
     slippageTolerance: 0.5, // 0.5%
     routeTimeout: 3000, // 3 seconds
-    monitoringInterval: parseInt(process.env.MONITORING_INTERVAL || '5000'), // 5 seconds
-    maxConcurrentScans: 3,
+    monitoringInterval: parseInt(process.env.MONITORING_INTERVAL || '20000'), // 20 seconds
+    maxConcurrentScans: 2,
   },
 
   tokens: {
@@ -107,6 +133,7 @@ export const config: ArbConfig = {
     tokenBlacklist: [
       // Add any tokens you want to exclude here
     ],
+    solMint: 'So11111111111111111111111111111111111111112', // SOL token address
   },
 
   dexes: {
@@ -134,7 +161,7 @@ export const config: ArbConfig = {
   },
 
   monitoring: {
-    logLevel: (process.env.LOG_LEVEL as any) || 'info',
+    logLevel: (process.env.LOG_LEVEL as any) || 'debug',
     saveLogsToFile: true,
     logDirectory: './logs',
     alertOnProfit: true,
@@ -146,6 +173,34 @@ export const config: ArbConfig = {
     useCache: true,
     cacheTimeout: 60000, // 1 minute
     maxRouteDepth: 4, // Max 4 hops in a route
+  },
+
+  // Mempool settings
+  mempool: {
+    enabled: process.env.MEMPOOL_ENABLED === 'true' || true,
+    transactionTypes: ['swap', 'liquidity'],
+    filterByToken: true,
+    targetTokens: [
+      'So11111111111111111111111111111111111111112', // WSOL
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+    ],
+    minTransactionValue: 1000, // Minimum transaction value to monitor (in USD)
+  },
+
+  // New triangular arbitrage scanner settings
+  triangleScanner: {
+    enabled: process.env.TRIANGLE_SCANNER_ENABLED === 'true' || true,
+    requestInterval: 2000, // 2 seconds between API requests (to avoid rate limits)
+    reportDir: './triangle-reports',
+    tokenCacheTime: 24 * 60 * 60 * 1000, // 24 hours cache lifetime
+    birdeyeApiKey: BIRDEYE_KEY,
+  },
+
+  // API keys
+  apis: {
+    birdeyeApiKey: BIRDEYE_KEY,
+    heliusKey: HELIUS_KEY,
   },
 };
 

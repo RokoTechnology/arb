@@ -1,70 +1,47 @@
-// paper-trading.ts - Paper Trading implementation for Solana Arbitrage Bot
-import { Connection, PublicKey } from '@solana/web3.js';
-import { Jupiter } from '@jup-ag/core';
+// paper-trading.ts - Paper trading simulation for the Solana arbitrage bot
+import { Connection } from '@solana/web3.js';
 import * as fs from 'fs';
-import path from 'path';
+import * as path from 'path';
+import { JupiterAPI } from './jupiter-api';
 
-// Paper trading configuration type
+// Paper trading configuration interface
 interface PaperTradingConfig {
   enabled: boolean;
-  initialBalance: {
-    [tokenMint: string]: number;
-  };
-  slippageAdjustment: number; // Factor to adjust expected profits to simulate real-world slippage
-  gasFeesSimulation: boolean; // Whether to deduct simulated gas fees from profits
-  recordDirectory: string; // Directory to store trade records
-  successRate: number; // Simulated success rate (0-1) to account for failed transactions
-  latencyMs: number; // Simulated latency in milliseconds
-  reportInterval: number; // Interval for generating reports in milliseconds
+  initialBalances: { [tokenMint: string]: number };
+  gasFee: number; // Simulated gas fee per transaction
+  slippageVariation: number; // Random slippage variation percentage
+  reportDir: string;
 }
 
-// Trade record type
-interface TradeRecord {
+// Trade history interface
+interface TradeHistory {
   timestamp: number;
   route: string[];
-  tokenSymbols: string[];
-  startToken: string;
   startAmount: number;
-  expectedEndAmount: number;
-  adjustedEndAmount: number; // After simulated slippage
+  endAmount: number;
   profit: number;
   profitPercentage: number;
-  gasUsed?: number;
-  successful: boolean;
-  failureReason?: string;
-  dexes: string[];
-}
-
-// Balance record type
-interface BalanceRecord {
-  timestamp: number;
-  balances: {
-    [tokenMint: string]: number;
-  };
-  totalValueUSD: number;
-}
-
-// Token info for readable logs
-interface TokenInfo {
-  mint: string;
-  symbol: string;
-  name: string;
-  decimals: number;
+  gasFees: number;
+  netProfit: number;
+  balances: { [tokenMint: string]: number };
 }
 
 export class PaperTrading {
   private config: PaperTradingConfig;
-  private balances: { [tokenMint: string]: number } = {};
-  private tradeHistory: TradeRecord[] = [];
-  private balanceHistory: BalanceRecord[] = [];
-  private tokenInfo: { [mint: string]: TokenInfo } = {};
-  private logger: any;
   private connection: Connection;
+  private tokenInfo: any;
+  private logger: any;
+
+  // Current token balances
+  private balances: { [tokenMint: string]: number } = {};
+
+  // Trade history
+  private tradeHistory: TradeHistory[] = [];
 
   constructor(
     config: PaperTradingConfig,
     connection: Connection,
-    tokenInfo: { [mint: string]: TokenInfo },
+    tokenInfo: any,
     logger: any
   ) {
     this.config = config;
@@ -72,347 +49,179 @@ export class PaperTrading {
     this.tokenInfo = tokenInfo;
     this.logger = logger;
 
-    // Initialize balances from config
-    this.balances = { ...this.config.initialBalance };
+    // Initialize token balances
+    this.balances = { ...config.initialBalances };
 
-    // Create record directory if it doesn't exist
-    if (!fs.existsSync(this.config.recordDirectory)) {
-      fs.mkdirSync(this.config.recordDirectory, { recursive: true });
-    }
-
-    // Initial balance history record
-    this.recordBalance();
-
-    this.logger.info('Paper trading mode initialized');
-    this.logger.info('Initial balances:');
-    Object.entries(this.balances).forEach(([mint, amount]) => {
-      const symbol = this.tokenInfo[mint]?.symbol || mint.slice(0, 8) + '...';
-      this.logger.info(`- ${symbol}: ${amount}`);
+    this.logger.info('Paper trading initialized with balances:');
+    Object.entries(this.balances).forEach(([mint, balance]) => {
+      const symbol = this.tokenInfo[mint]?.symbol || mint.substring(0, 8);
+      this.logger.info(`- ${symbol}: ${balance}`);
     });
   }
 
-  // Get current balance for a token
+  // Get balance for a token
   getBalance(tokenMint: string): number {
     return this.balances[tokenMint] || 0;
   }
 
-  // Get all current balances
-  getAllBalances(): { [tokenMint: string]: number } {
-    return { ...this.balances };
+  // Set balance for a token
+  setBalance(tokenMint: string, amount: number): void {
+    this.balances[tokenMint] = amount;
   }
 
   // Execute a paper trade
   async executeTrade(
-    opportunity: {
-      route: string[];
-      steps: any[];
-      startAmount: number;
-      endAmount: number;
-      profit: number;
-      profitPercentage: number;
-    },
-    jupiter: Jupiter
+    opportunity: any,
+    jupiterApi: JupiterAPI
   ): Promise<any> {
-    // Create a new trade record
-    const now = Date.now();
+    try {
+      this.logger.info('Executing paper trade...');
 
-    // Simulate network latency
-    if (this.config.latencyMs > 0) {
-      await new Promise(resolve => setTimeout(resolve, this.config.latencyMs));
-    }
+      // Check if we have sufficient balance
+      const startToken = opportunity.route[0];
+      if (this.getBalance(startToken) < opportunity.startAmount) {
+        this.logger.warn(`Insufficient paper balance for ${this.tokenInfo[startToken]?.symbol || startToken}`);
+        return { success: false, reason: 'insufficient_balance' };
+      }
 
-    // Determine if trade will be "successful" based on configured success rate
-    const isSuccessful = Math.random() < this.config.successRate;
+      // Simulated gas fees for the trade
+      const gasFeesSOL = this.config.gasFee * (opportunity.steps.length);
+      this.logger.info(`Estimated gas fees: ${gasFeesSOL.toFixed(6)} SOL`);
 
-    // Map token mints to symbols for readability
-    const tokenSymbols = opportunity.route.map(mint =>
-      this.tokenInfo[mint]?.symbol || mint.slice(0, 8) + '...'
-    );
+      // Reduce SOL balance by gas fee
+      const solMint = 'So11111111111111111111111111111111111111112';
+      this.balances[solMint] -= gasFeesSOL;
 
-    // Get start and end token
-    const startToken = opportunity.route[0];
-    const endToken = opportunity.route[opportunity.route.length - 1];
+      // Apply the paper trade
+      let currentToken = startToken;
+      let currentAmount = opportunity.startAmount;
 
-    // Get list of DEXes used
-    const dexes = opportunity.steps.map(step => step.dex || 'Unknown');
+      // Reduce initial token balance
+      this.balances[currentToken] -= currentAmount;
 
-    // Apply slippage adjustment to simulate real-world conditions
-    const adjustedEndAmount = opportunity.endAmount * (1 - this.config.slippageAdjustment);
-    const adjustedProfit = adjustedEndAmount - opportunity.startAmount;
-    const adjustedProfitPercentage = (adjustedProfit / opportunity.startAmount) * 100;
+      // Simulate each swap
+      for (const step of opportunity.steps) {
+        const inputMint = step.inputMint;
+        const outputMint = step.outputMint;
 
-    // Simulate gas fees if enabled
-    let gasUsed = 0;
-    if (this.config.gasFeesSimulation) {
-      // Estimate gas: ~0.00005 SOL per swap on average
-      gasUsed = opportunity.steps.length * 0.00005;
-    }
+        // Apply random slippage variation if configured
+        let outputAmount = step.outputAmount;
+        if (this.config.slippageVariation > 0) {
+          // Calculate random slippage between 0 and slippageVariation
+          const slippageFactor = 1 - (Math.random() * this.config.slippageVariation / 100);
+          outputAmount *= slippageFactor;
+          this.logger.debug(`Applied slippage variation: ${((1 - slippageFactor) * 100).toFixed(2)}%`);
+        }
 
-    // Create trade record
-    const tradeRecord: TradeRecord = {
-      timestamp: now,
-      route: opportunity.route,
-      tokenSymbols,
-      startToken,
-      startAmount: opportunity.startAmount,
-      expectedEndAmount: opportunity.endAmount,
-      adjustedEndAmount,
-      profit: adjustedProfit - gasUsed,
-      profitPercentage: adjustedProfitPercentage,
-      gasUsed: this.config.gasFeesSimulation ? gasUsed : undefined,
-      successful: isSuccessful,
-      dexes,
-    };
+        // Update current tracking variables
+        currentToken = outputMint;
+        currentAmount = outputAmount;
 
-    // If trade is not successful, add a simulated failure reason
-    if (!isSuccessful) {
-      const failureReasons = [
-        'Transaction timed out',
-        'Slippage exceeded',
-        'Insufficient liquidity',
-        'Price changed during execution',
-        'Order book was updated',
-        'DEX temporarily unavailable'
-      ];
-      tradeRecord.failureReason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
-      this.logger.warn(`Paper trade failed: ${tradeRecord.failureReason}`);
+        // Add to token balance
+        if (!this.balances[currentToken]) {
+          this.balances[currentToken] = 0;
+        }
+        this.balances[currentToken] += currentAmount;
+
+        // Log the paper swap
+        const inputSymbol = this.tokenInfo[inputMint]?.symbol || inputMint.substring(0, 8);
+        const outputSymbol = this.tokenInfo[outputMint]?.symbol || outputMint.substring(0, 8);
+        this.logger.info(`Paper swap: ${step.inputAmount.toFixed(6)} ${inputSymbol} -> ${outputAmount.toFixed(6)} ${outputSymbol}`);
+      }
+
+      // Calculate final profit
+      const finalAmount = this.balances[startToken];
+      const tradedAmount = opportunity.startAmount;
+      const grossProfit = opportunity.profit;
+      const netProfit = grossProfit - gasFeesSOL;
+
+      // Record trade in history
+      const trade: TradeHistory = {
+        timestamp: Date.now(),
+        route: opportunity.route.map((mint: string) => this.tokenInfo[mint]?.symbol || mint.substring(0, 8)),
+        startAmount: opportunity.startAmount,
+        endAmount: opportunity.endAmount,
+        profit: grossProfit,
+        profitPercentage: opportunity.profitPercentage,
+        gasFees: gasFeesSOL,
+        netProfit: netProfit,
+        balances: { ...this.balances }
+      };
+
+      this.tradeHistory.push(trade);
+
+      // Save report after each trade if directory is configured
+      if (this.config.reportDir) {
+        this.saveReport();
+      }
+
+      // Log results
+      this.logger.info(`Paper trade complete!`);
+      this.logger.info(`Gross Profit: ${grossProfit.toFixed(6)} SOL (${opportunity.profitPercentage.toFixed(2)}%)`);
+      this.logger.info(`Gas Fees: ${gasFeesSOL.toFixed(6)} SOL`);
+      this.logger.info(`Net Profit: ${netProfit.toFixed(6)} SOL`);
+
+      // Log updated balances
+      this.logger.info('Updated paper balances:');
+      Object.entries(this.balances).forEach(([mint, balance]) => {
+        const symbol = this.tokenInfo[mint]?.symbol || mint.substring(0, 8);
+        if (balance > 0) {
+          this.logger.info(`- ${symbol}: ${balance.toFixed(6)}`);
+        }
+      });
 
       return {
-        success: false,
-        reason: tradeRecord.failureReason,
-        profit: 0,
-        profitPercentage: 0
+        success: true,
+        grossProfit,
+        netProfit,
+        gasFees: gasFeesSOL
       };
-    } else {
-      // Update balances if trade is successful
-      // Deduct initial amount
-      this.balances[startToken] = (this.balances[startToken] || 0) - opportunity.startAmount;
 
-      // Add result amount
-      this.balances[endToken] = (this.balances[endToken] || 0) + adjustedEndAmount;
+    } catch (error: any) {
+      this.logger.error('Error in paper trading execution:', error);
+      return {
+        success: false,
+        reason: 'execution_error',
+        error: error.message
+      };
+    }
+  }
 
-      // Deduct gas fees if enabled (from SOL balance)
-      if (this.config.gasFeesSimulation) {
-        const solMint = 'So11111111111111111111111111111111111111112'; // WSOL mint
-        this.balances[solMint] = (this.balances[solMint] || 0) - gasUsed;
+  // Save trading report to disk
+  saveReport(): string {
+    try {
+      // Create report directory if it doesn't exist
+      if (!fs.existsSync(this.config.reportDir)) {
+        fs.mkdirSync(this.config.reportDir, { recursive: true });
       }
 
-      this.logger.info(`Paper trade executed successfully: ${tokenSymbols.join(' -> ')}`);
-      this.logger.info(`Profit: ${tradeRecord.profit.toFixed(6)} (${tradeRecord.profitPercentage.toFixed(2)}%)`);
-    }
+      // Generate report data
+      const reportData = {
+        generatedAt: new Date().toISOString(),
+        currentBalances: Object.entries(this.balances).map(([mint, balance]) => ({
+          mint,
+          symbol: this.tokenInfo[mint]?.symbol || mint.substring(0, 8),
+          balance
+        })).filter(item => item.balance > 0),
+        summary: {
+          totalTrades: this.tradeHistory.length,
+          totalGrossProfit: this.tradeHistory.reduce((sum, trade) => sum + trade.profit, 0),
+          totalGasFees: this.tradeHistory.reduce((sum, trade) => sum + trade.gasFees, 0),
+          totalNetProfit: this.tradeHistory.reduce((sum, trade) => sum + trade.netProfit, 0),
+        },
+        trades: this.tradeHistory
+      };
 
-    // Record trade
-    this.tradeHistory.push(tradeRecord);
-    this.saveTradeRecord(tradeRecord);
+      // Save to file
+      const reportFileName = `paper_trading_report_${new Date().toISOString().replace(/:/g, '-')}.json`;
+      const reportPath = path.join(this.config.reportDir, reportFileName);
 
-    // Update balance history
-    this.recordBalance();
+      fs.writeFileSync(reportPath, JSON.stringify(reportData, null, 2));
 
-    return {
-      success: true,
-      profit: tradeRecord.profit,
-      profitPercentage: tradeRecord.profitPercentage
-    };
-  }
-
-  // Record current balance
-  private recordBalance() {
-    // Get the total value in USD (would require price feeds in a real implementation)
-    // This is a simplified version
-    let totalValueUSD = 0;
-
-    try {
-      // Get USD value of each token
-      for (const [mint, amount] of Object.entries(this.balances)) {
-        if (amount <= 0) continue;
-
-        // This would normally use price feeds or DEX data
-        // For simplicity, we're using placeholder values
-        const placeholder_prices: {[key: string]: number} = {
-          'So11111111111111111111111111111111111111112': 25, // WSOL at $25
-          'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1, // USDC at $1
-        };
-
-        const price = placeholder_prices[mint] || 1; // Default to 1 if unknown
-        totalValueUSD += amount * price;
-      }
+      return reportPath;
     } catch (error) {
-      this.logger.error('Error calculating USD value:', error);
+      this.logger.error('Error saving paper trading report:', error);
+      return '';
     }
-
-    const balanceRecord: BalanceRecord = {
-      timestamp: Date.now(),
-      balances: { ...this.balances },
-      totalValueUSD,
-    };
-
-    this.balanceHistory.push(balanceRecord);
-    this.saveBalanceRecord(balanceRecord);
-  }
-
-  // Save trade record to file
-  private saveTradeRecord(record: TradeRecord) {
-    try {
-      const filename = path.join(
-        this.config.recordDirectory,
-        `trade_${record.timestamp}.json`
-      );
-
-      fs.writeFileSync(filename, JSON.stringify(record, null, 2));
-    } catch (error) {
-      this.logger.error('Error saving trade record:', error);
-    }
-  }
-
-  // Save balance record to file
-  private saveBalanceRecord(record: BalanceRecord) {
-    try {
-      const filename = path.join(
-        this.config.recordDirectory,
-        `balance_${record.timestamp}.json`
-      );
-
-      fs.writeFileSync(filename, JSON.stringify(record, null, 2));
-
-      // Also update the latest balance file
-      const latestFilename = path.join(
-        this.config.recordDirectory,
-        'latest_balance.json'
-      );
-
-      fs.writeFileSync(latestFilename, JSON.stringify(record, null, 2));
-    } catch (error) {
-      this.logger.error('Error saving balance record:', error);
-    }
-  }
-
-  // Get trade history
-  getTradeHistory(): TradeRecord[] {
-    return [...this.tradeHistory];
-  }
-
-  // Get balance history
-  getBalanceHistory(): BalanceRecord[] {
-    return [...this.balanceHistory];
-  }
-
-  // Get performance metrics
-  getPerformanceMetrics() {
-    // Calculate various performance metrics
-    const totalTrades = this.tradeHistory.length;
-    const successfulTrades = this.tradeHistory.filter(t => t.successful).length;
-    const successRate = totalTrades > 0 ? successfulTrades / totalTrades : 0;
-
-    // Calculate total profit
-    let totalProfit = 0;
-    let profitableTrades = 0;
-
-    this.tradeHistory.forEach(trade => {
-      if (trade.successful) {
-        totalProfit += trade.profit;
-        if (trade.profit > 0) {
-          profitableTrades++;
-        }
-      }
-    });
-
-    // Get initial and current balance value
-    const initialBalance = this.balanceHistory[0]?.totalValueUSD || 0;
-    const currentBalance = this.balanceHistory[this.balanceHistory.length - 1]?.totalValueUSD || 0;
-    const totalReturn = currentBalance - initialBalance;
-    const percentReturn = initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
-
-    return {
-      totalTrades,
-      successfulTrades,
-      successRate,
-      profitableTrades,
-      totalProfit,
-      initialBalance,
-      currentBalance,
-      totalReturn,
-      percentReturn,
-    };
-  }
-
-  // Generate a performance report
-  generateReport(): string {
-    const metrics = this.getPerformanceMetrics();
-    const startTime = this.balanceHistory[0]?.timestamp;
-    const endTime = Date.now();
-    const durationMs = endTime - (startTime || endTime);
-    const durationHours = durationMs / (1000 * 60 * 60);
-
-    let report = '=== PAPER TRADING PERFORMANCE REPORT ===\n\n';
-
-    report += `Duration: ${durationHours.toFixed(2)} hours\n`;
-    report += `Total trades: ${metrics.totalTrades}\n`;
-    report += `Successful trades: ${metrics.successfulTrades} (${(metrics.successRate * 100).toFixed(2)}%)\n`;
-    report += `Profitable trades: ${metrics.profitableTrades} (${metrics.totalTrades > 0 ? (metrics.profitableTrades / metrics.totalTrades * 100).toFixed(2) : 0}%)\n`;
-    report += `Total profit: ${metrics.totalProfit.toFixed(6)} SOL\n`;
-    report += `Initial portfolio value: $${metrics.initialBalance.toFixed(2)}\n`;
-    report += `Current portfolio value: $${metrics.currentBalance.toFixed(2)}\n`;
-    report += `Total return: $${metrics.totalReturn.toFixed(2)} (${metrics.percentReturn.toFixed(2)}%)\n`;
-
-    if (durationHours > 0) {
-      const hourlyReturn = metrics.totalProfit / durationHours;
-      report += `Average hourly profit: ${hourlyReturn.toFixed(6)} SOL\n`;
-
-      const projectedDailyReturn = hourlyReturn * 24;
-      const projectedMonthlyReturn = projectedDailyReturn * 30;
-      const projectedYearlyReturn = projectedDailyReturn * 365;
-
-      report += `Projected daily profit: ${projectedDailyReturn.toFixed(6)} SOL\n`;
-      report += `Projected monthly profit: ${projectedMonthlyReturn.toFixed(6)} SOL\n`;
-      report += `Projected yearly profit: ${projectedYearlyReturn.toFixed(6)} SOL\n`;
-    }
-
-    report += '\n=== CURRENT BALANCES ===\n\n';
-
-    Object.entries(this.balances).forEach(([mint, amount]) => {
-      if (amount > 0) {
-        const symbol = this.tokenInfo[mint]?.symbol || mint.slice(0, 8) + '...';
-        report += `${symbol}: ${amount}\n`;
-      }
-    });
-
-    return report;
-  }
-
-  // Save full report to file
-  saveReport(): string | null {
-    try {
-      const report = this.generateReport();
-      const filename = path.join(
-        this.config.recordDirectory,
-        `report_${Date.now()}.txt`
-      );
-
-      fs.writeFileSync(filename, report);
-      return filename;
-    } catch (error) {
-      this.logger.error('Error saving report:', error);
-      return null;
-    }
-  }
-
-  // Reset paper trading data
-  resetData(initialBalances?: {[tokenMint: string]: number}): void {
-    // Reset balances to initial or provided balances
-    this.balances = initialBalances ? { ...initialBalances } : { ...this.config.initialBalance };
-
-    // Clear history
-    this.tradeHistory = [];
-    this.balanceHistory = [];
-
-    // Record initial balance
-    this.recordBalance();
-
-    this.logger.info('Paper trading data reset');
-    this.logger.info('Initial balances:');
-    Object.entries(this.balances).forEach(([mint, amount]) => {
-      const symbol = this.tokenInfo[mint]?.symbol || mint.slice(0, 8) + '...';
-      this.logger.info(`- ${symbol}: ${amount}`);
-    });
   }
 }
