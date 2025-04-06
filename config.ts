@@ -113,11 +113,11 @@ export const config: ArbConfig = {
   },
 
   arbitrage: {
-    minimumProfitThreshold: parseFloat(process.env.MIN_PROFIT_THRESHOLD || '0.003'), // 0.3%
+    minimumProfitThreshold: parseFloat(process.env.MIN_PROFIT_THRESHOLD || '0.0001'), // 0.01%
     maxTradeSize: parseFloat(process.env.MAX_TRADE_SIZE || '10'), // 10 SOL
-    slippageTolerance: 0.5, // 0.5%
+    slippageTolerance: 0.01, // 0.01%
     routeTimeout: 3000, // 3 seconds
-    monitoringInterval: parseInt(process.env.MONITORING_INTERVAL || '20000'), // 20 seconds
+    monitoringInterval: parseInt(process.env.MONITORING_INTERVAL || '60000'), // 60 seconds
     maxConcurrentScans: 2,
   },
 
@@ -148,9 +148,8 @@ export const config: ArbConfig = {
     enabled: process.env.PAPER_TRADING === 'true' || true,
     initialBalance: {
       'So11111111111111111111111111111111111111112': 10, // 10 WSOL
-      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 100, // 100 USDC
     },
-    slippageAdjustment: 0.005, // 0.5%
+    slippageAdjustment: 0.0001, // 0.01%
     gasFeesSimulation: true,
     recordDirectory: './paper-trading-records',
     successRate: 0.95, // 95% success rate

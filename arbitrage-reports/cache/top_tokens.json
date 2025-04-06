@@ -1,0 +1,402 @@
+[
+  {
+    "symbol": "SOL",
+    "name": "Wrapped SOL",
+    "mint": "So11111111111111111111111111111111111111112",
+    "decimals": 9,
+    "volume24h": 1617826684.2192488,
+    "price": 115.2849400945224
+  },
+  {
+    "symbol": "USDC",
+    "name": "USD Coin",
+    "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "decimals": 6,
+    "volume24h": 421883584.58835614,
+    "price": 1
+  },
+  {
+    "symbol": "Fartcoin ",
+    "name": "Fartcoin ",
+    "mint": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+    "decimals": 6,
+    "volume24h": 71410038.51930445,
+    "price": 0.4673745810241405
+  },
+  {
+    "symbol": "USDT",
+    "name": "USDT",
+    "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+    "decimals": 6,
+    "volume24h": 68769114.86977437,
+    "price": 0.99964
+  },
+  {
+    "symbol": "PEPEG",
+    "name": "Pepe Grok",
+    "mint": "31MPMFMnWBeRZ3k3S3nJUUxfkhSutKRH1fWyJBsNpump",
+    "decimals": 6,
+    "volume24h": 56172606.36026943,
+    "price": 0.00001355133103548474
+  },
+  {
+    "symbol": "TRUMP",
+    "name": "OFFICIAL TRUMP",
+    "mint": "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN",
+    "decimals": 6,
+    "volume24h": 49699694.704409495,
+    "price": 8.85067598741669
+  },
+  {
+    "symbol": "WBTC",
+    "name": "Wrapped BTC (Wormhole)",
+    "mint": "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh",
+    "decimals": 8,
+    "volume24h": 35866881.470788375,
+    "price": 82462.04588807549
+  },
+  {
+    "symbol": "KIN",
+    "name": "KIN",
+    "mint": "kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6",
+    "decimals": 5,
+    "volume24h": 31762138.35680099,
+    "price": 0.0000026166889225874217
+  },
+  {
+    "symbol": "TDCCP",
+    "name": "TDCCP",
+    "mint": "Hg8bKz4mvs8KNj9zew1cEF9tDw1x2GViB4RFZjVEmfrD",
+    "decimals": 9,
+    "volume24h": 24429812.52604632,
+    "price": 2.4072304478909317
+  },
+  {
+    "symbol": "cbBTC",
+    "name": "Coinbase Wrapped BTC",
+    "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+    "decimals": 8,
+    "volume24h": 22712834.46955573,
+    "price": 82623.51929602114
+  },
+  {
+    "symbol": "JitoSOL",
+    "name": "Jito Staked SOL",
+    "mint": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+    "decimals": 9,
+    "volume24h": 19222394.590413157,
+    "price": 137.50840110507488
+  },
+  {
+    "symbol": "JUP",
+    "name": "Jupiter",
+    "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    "decimals": 6,
+    "volume24h": 17031589.540970787,
+    "price": 0.36998499293697085
+  },
+  {
+    "symbol": "WETH",
+    "name": "Wrapped Ether (Wormhole)",
+    "mint": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+    "decimals": 8,
+    "volume24h": 15976819.290909275,
+    "price": 1765.140303456672
+  },
+  {
+    "symbol": "EURC",
+    "name": "EURC",
+    "mint": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+    "decimals": 6,
+    "volume24h": 13870792.53697145,
+    "price": 1.0960175132225294
+  },
+  {
+    "symbol": "JLP",
+    "name": "Jupiter Perps LP",
+    "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+    "decimals": 6,
+    "volume24h": 13503449.198024068,
+    "price": 3.5843888846641314
+  },
+  {
+    "symbol": "Monkeys",
+    "name": "Elon Musk's Official X Group",
+    "mint": "D4dfSb86qUb949MCsAJmGzbyXo7YhgaMNj7c9F49pump",
+    "decimals": 6,
+    "volume24h": 12965801.437109001,
+    "price": 0.0010165967385154394
+  },
+  {
+    "symbol": "TIKTOK",
+    "name": "Official TIKTOK COIN",
+    "mint": "CCcHbhP9KEkU9oWdtsDaC4VpMwwPy3b3sr8ajad3Qvd8",
+    "decimals": 6,
+    "volume24h": 10738521.05037887,
+    "price": 0.0008837551031636443
+  },
+  {
+    "symbol": "Figure",
+    "name": "Action Figure",
+    "mint": "7LSsEoJGhLeZzGvDofTdNg7M3JttxQqGWNLo6vWMpump",
+    "decimals": 6,
+    "volume24h": 10340206.993141927,
+    "price": 0.0033228180434599327
+  },
+  {
+    "symbol": "r/stocks",
+    "name": "r/stocks",
+    "mint": "2iJacucgFpF2WjYzwx2ZXBs4bw7eYEScqxcayXZJpump",
+    "decimals": 6,
+    "volume24h": 10272392.211135792,
+    "price": 0.0005641537477331978
+  },
+  {
+    "symbol": "Faggot",
+    "name": "Faggot",
+    "mint": "AEsiEqMLzA9U5TWd1XuyR3CXrEnd8XbUuBTQbesBpump",
+    "decimals": 6,
+    "volume24h": 8909722.40593931,
+    "price": 0.0004988137624402413
+  },
+  {
+    "symbol": "RFC",
+    "name": "Retard Finder Coin",
+    "mint": "C3DwDjT17gDvvCYC2nsdGHxDHVmQRdhKfpAdqQ29pump",
+    "decimals": 6,
+    "volume24h": 8342407.208749584,
+    "price": 0.015112104194601633
+  },
+  {
+    "symbol": "titcoin",
+    "name": "titcoin",
+    "mint": "FtUEW73K6vEYHfbkfpdBZfWpxgQar2HipGdbutEhpump",
+    "decimals": 6,
+    "volume24h": 8279386.596222796,
+    "price": 0.024497700947927813
+  },
+  {
+    "symbol": "DARK",
+    "name": "Dark Eclipse",
+    "mint": "8BtoThi2ZoXnF7QQK1Wjmh2JuBw9FjVvhnGMVZ2vpump",
+    "decimals": 6,
+    "volume24h": 7817532.215335298,
+    "price": 0.0022465587262944665
+  },
+  {
+    "symbol": "FLOKI",
+    "name": "FLOKI",
+    "mint": "7YB3DMD5fkFyZjPxzpVDyFHyCyfYLrYQe8Y65gHzpump",
+    "decimals": 6,
+    "volume24h": 6864104.395365236,
+    "price": 0.0011272401645042265
+  },
+  {
+    "symbol": "mSOL",
+    "name": "Marinade staked SOL (mSOL)",
+    "mint": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+    "decimals": 9,
+    "volume24h": 5368702.21176658,
+    "price": 147.9174118090334
+  },
+  {
+    "symbol": "RAY",
+    "name": "Raydium",
+    "mint": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+    "decimals": 6,
+    "volume24h": 4853329.997938197,
+    "price": 1.6948606804987782
+  },
+  {
+    "symbol": "TTC",
+    "name": "THE TRUMP CYCLE",
+    "mint": "97FYdmVeYdzXFxp57GRSPEQva7joPt7LK6tLmup2pump",
+    "decimals": 6,
+    "volume24h": 4599075.878844179,
+    "price": 0.00000570264119120081
+  },
+  {
+    "symbol": "0.01",
+    "name": "Helper",
+    "mint": "Bt1FFzaDSv7ffVu5jDpr2dUXjw3a74rRMMdVkERcvcVz",
+    "decimals": 6,
+    "volume24h": 4483705.100812976,
+    "price": 0.00005912451031363509
+  },
+  {
+    "symbol": "KvK",
+    "name": "Kanto vs Kansai",
+    "mint": "36hPeebKEpW8b3GYmsaxt1uMhP9J1VSCSH9iy7SUpump",
+    "decimals": 6,
+    "volume24h": 4319003.311701693,
+    "price": 0.00018324757644977904
+  },
+  {
+    "symbol": "Monkeys",
+    "name": "Elon Musk's Official X Group",
+    "mint": "1QGhHgig6C5na9BD8Rooz9LksvTmXiD8M6FHmYDpump",
+    "decimals": 6,
+    "volume24h": 3886517.228106524,
+    "price": 0.000006189932582195522
+  },
+  {
+    "symbol": "BUTTCOIN",
+    "name": "The Next Bitcoin",
+    "mint": "FasH397CeZLNYWkd3wWK9vrmjd1z93n3b59DssRXpump",
+    "decimals": 6,
+    "volume24h": 3804605.422247651,
+    "price": 0.009240958447468748
+  },
+  {
+    "symbol": "shekel",
+    "name": "1968, Israeli shekel coin",
+    "mint": "BpE2RK9ywKYToUJVJJq4L7PbnV3nGPdRnqZLT4U3pump",
+    "decimals": 6,
+    "volume24h": 3753648.2636570716,
+    "price": 0.00042685800920389574
+  },
+  {
+    "symbol": "FLOKI",
+    "name": "FLOKI",
+    "mint": "2iEjkph18vY7pYxEo2pVicyQYtCtELDdBMoPncbypump",
+    "decimals": 6,
+    "volume24h": 3664853.394248832,
+    "price": 0.00024256023427962056
+  },
+  {
+    "symbol": "PEPE",
+    "name": "Pepe",
+    "mint": "EXqzgQbZx5Bxr5x8XqBmN6pS3fKXfLqqDiKBDtH7pump",
+    "decimals": 6,
+    "volume24h": 3661637.89018849,
+    "price": 0.0004398922900528989
+  },
+  {
+    "symbol": "House",
+    "name": "Housecoin",
+    "mint": "DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump",
+    "decimals": 6,
+    "volume24h": 3646962.6249129893,
+    "price": 0.006252125229858806
+  },
+  {
+    "symbol": "Ghibli",
+    "name": "Ghiblification",
+    "mint": "4TBi66vi32S7J8X1A6eWfaLHYmUXu7CStcEmsJQdpump",
+    "decimals": 6,
+    "volume24h": 3350386.4711506027,
+    "price": 0.004539845210042357
+  },
+  {
+    "symbol": "MERS",
+    "name": "MERS",
+    "mint": "6vMqkJTiXhcRqPcpvToff8r3sYrfghRcMCNZoJAujHhU",
+    "decimals": 8,
+    "volume24h": 3273063.504561,
+    "price": 619891.8984383434
+  },
+  {
+    "symbol": "WWE",
+    "name": "WWE",
+    "mint": "DCrQZbZc8m44dZGfXCypnxczPFJ8cYZnbYQhmtRrpump",
+    "decimals": 6,
+    "volume24h": 3267931.727782808,
+    "price": 0.000012689951656328585
+  },
+  {
+    "symbol": "SPX",
+    "name": "SPX6900 (Wormhole)",
+    "mint": "J3NKxxXZcnNiMjKw9hYb2K4LUxgwB6t1FtPtQVsv3KFr",
+    "decimals": 8,
+    "volume24h": 3244291.780238332,
+    "price": 0.45427187391097773
+  },
+  {
+    "symbol": "USDS",
+    "name": "USDS",
+    "mint": "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA",
+    "decimals": 6,
+    "volume24h": 3218940.099232223,
+    "price": 1.0000676303170049
+  },
+  {
+    "symbol": "JupSOL",
+    "name": "Jupiter Staked SOL",
+    "mint": "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v",
+    "decimals": 9,
+    "volume24h": 3152960.4422760513,
+    "price": 126.63685515013378
+  },
+  {
+    "symbol": "MEW",
+    "name": "cat in a dogs world",
+    "mint": "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5",
+    "decimals": 5,
+    "volume24h": 3069492.20033208,
+    "price": 0.002570010309651404
+  },
+  {
+    "symbol": "zBTC",
+    "name": "zBTC",
+    "mint": "zBTCug3er3tLyffELcvDNrKkCymbPWysGcWihESYfLg",
+    "decimals": 8,
+    "volume24h": 2986881.0800623656,
+    "price": 82575.93686714492
+  },
+  {
+    "symbol": "LAYER",
+    "name": "Solayer",
+    "mint": "LAYER4xPpTCb3QL8S9u41EAhAX7mhBn8Q6xMTwY2Yzc",
+    "decimals": 9,
+    "volume24h": 2790168.2219033893,
+    "price": 1.572721390510904
+  },
+  {
+    "symbol": "lingerie",
+    "name": "the safe haven asset",
+    "mint": "FToZ66Qpxxm7FGpmCHoo9YBtbDKi4ioDUUhGQxFxpump",
+    "decimals": 6,
+    "volume24h": 2733962.42081092,
+    "price": 0.00018478750522668425
+  },
+  {
+    "symbol": "AISLOP",
+    "name": "AI SLOP",
+    "mint": "2wzVMXhLypmP92mXNCq4fuFcd9TCC972AbMfuiH3pump",
+    "decimals": 6,
+    "volume24h": 2611194.564597847,
+    "price": 0.0014178848641320733
+  },
+  {
+    "symbol": "LUCE",
+    "name": "Official Mascot of the Holy Year",
+    "mint": "CBdCxKo9QavR9hfShgpEBG3zekorAeD7W1jfq2o3pump",
+    "decimals": 6,
+    "volume24h": 2573077.5152673996,
+    "price": 0.01603836798314282
+  },
+  {
+    "symbol": "ai16z",
+    "name": "ai16z",
+    "mint": "HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC",
+    "decimals": 9,
+    "volume24h": 2523085.22033046,
+    "price": 0.11659319008140148
+  },
+  {
+    "symbol": "Hamtoshi",
+    "name": "Hamtoshi Hamamoto",
+    "mint": "ah6zXjue9bcb1vCFZBPD5Vh3Jy58deGo2kqJrrmpump",
+    "decimals": 6,
+    "volume24h": 2492374.7675100556,
+    "price": 0.000005675737453425623
+  },
+  {
+    "symbol": "BOUNCE",
+    "name": "Generational Bottom",
+    "mint": "C1rsnCM99Tsu6Kn35DEjUaFsRqVfGhK3ohpM1Raipump",
+    "decimals": 6,
+    "volume24h": 2474707.613906818,
+    "price": 0.00046244012274654264
+  }
+]

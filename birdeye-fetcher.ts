@@ -16,7 +16,7 @@ export class BirdeyeFetcher {
   private apiKey: string;
   private cacheDir: string;
   private cacheTime: number;
-  private baseUrl = 'https://public-api.birdeye.so/public';  // Updated base URL with 'public' path
+  private baseUrl = 'https://public-api.birdeye.so/defi';  // Updated base URL with 'public' path
 
   constructor(apiKey: string, cacheDir: string, cacheTime: number = 3600000) {
     this.apiKey = apiKey;
@@ -60,7 +60,7 @@ export class BirdeyeFetcher {
       }
 
       // Updated endpoint for token list
-      const url = `${this.baseUrl}/token_list?sort_by=v24hUSD&sort_type=desc&offset=0&limit=${limit}`;
+      const url = `${this.baseUrl}/tokenlist?sort_by=v24hUSD&sort_type=desc&offset=0&limit=${limit}`;
 
       console.log(`Fetching tokens from: ${url}`);
 
@@ -76,16 +76,14 @@ export class BirdeyeFetcher {
 
       const data = await response.json();
 
-      // Check the actual structure of the response data
-      console.log('Response structure:', JSON.stringify(data).substring(0, 200) + '...');
 
-      if (!data.success || !data.data || !Array.isArray(data.data)) {
+      if (!data.success || !data.data || !Array.isArray(data.data.tokens)) {
         console.error('Unexpected API response format:', JSON.stringify(data).substring(0, 500));
         throw new Error('Invalid response from Birdeye API');
       }
 
       // Transform to our token data format
-      const tokens: TokenData[] = data.data.map((token: any) => ({
+      const tokens: TokenData[] = data.data.tokens.map((token: any) => ({
         symbol: token.symbol || 'UNKNOWN',
         name: token.name || 'Unknown Token',
         mint: token.address,
@@ -127,7 +125,7 @@ export class BirdeyeFetcher {
   // Utility method to test the API connection
   async testApiConnection(): Promise<boolean> {
     try {
-      const url = `${this.baseUrl}/token_list?limit=1`;
+      const url = `${this.baseUrl}/tokenlist?limit=1`;
       const response = await fetch(url, {
         headers: {
           'X-API-KEY': this.apiKey

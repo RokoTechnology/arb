@@ -100,7 +100,6 @@ export function setupJupiterAPI(requestsPerSecond = 5): JupiterAPI {
         }
 
         const data = await response.json();
-        console.log('API response structure:', JSON.stringify(data, null, 2).substring(0, 200) + '...');
 
         // Handle different possible response structures
         const routes = data.data || data.routes || [];
