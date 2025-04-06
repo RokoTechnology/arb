@@ -72,11 +72,13 @@ export interface ArbConfig {
   };
 }
 
+const HELIUS_KEY = process.env.HELIUS_KEY || 'helius-key-missing'
+
 // Direct configuration
 export const config: ArbConfig = {
   rpc: {
-    heliusRpcUrl: process.env.HELIUS_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=43cc204e-ea49-4017-8623-123f776557de',
-    wsEndpoint: process.env.HELIUS_WS_URL || 'wss://mainnet.helius-rpc.com/?api-key=43cc204e-ea49-4017-8623-123f776557de',
+    heliusRpcUrl: 'https://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
+    wsEndpoint: 'wss://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
     commitment: 'confirmed',
     timeout: 30000,
   },

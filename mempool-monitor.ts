@@ -1,26 +1,31 @@
-// Solana Mempool Monitor for Arbitrage Opportunities
+// mempool-monitor.ts - Solana Mempool Monitor for Arbitrage Opportunities
 // This implementation shows how to monitor the Solana mempool for pending swaps
 // that might create temporary arbitrage opportunities
 
-import { Connection, PublicKey, TransactionResponse } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { Jupiter } from '@jup-ag/core';
-import * as fs from 'fs';
 import WebSocket from 'ws';
-import { config } from './config'
+import { config } from './config';
 
 // Initialize logger
-const logger = {
-  debug: (...args) => config.logLevel === 'debug' && console.debug(new Date().toISOString(), ...args),
-  info: (...args) => ['debug', 'info'].includes(config.logLevel) && console.info(new Date().toISOString(), ...args),
-  warn: (...args) => ['debug', 'info', 'warn'].includes(config.logLevel) && console.warn(new Date().toISOString(), ...args),
-  error: (...args) => console.error(new Date().toISOString(), ...args),
+const createLogger = () => {
+  return {
+    debug: (...args: any[]) => config.monitoring.logLevel === 'debug' && console.debug(new Date().toISOString(), ...args),
+    info: (...args: any[]) => ['debug', 'info'].includes(config.monitoring.logLevel) && console.info(new Date().toISOString(), ...args),
+    warn: (...args: any[]) => ['debug', 'info', 'warn'].includes(config.monitoring.logLevel) && console.warn(new Date().toISOString(), ...args),
+    error: (...args: any[]) => console.error(new Date().toISOString(), ...args),
+  };
 };
-
-// Initialize connection to Helius RPC
-const connection = new Connection(config.rpc.heliusRpcUrl, 'confirmed');
 
 // Setup WebSocket connection to monitor mempool
 const setupMempoolMonitor = () => {
+  const logger = createLogger();
+
+  if (!config.rpc.heliusWsUrl) {
+    logger.error('Mempool monitoring requires Helius WebSocket URL. Please set heliusWsUrl in config.');
+    return null;
+  }
+
   const ws = new WebSocket(config.rpc.heliusWsUrl);
 
   ws.on('open', () => {
@@ -73,7 +78,9 @@ const setupMempoolMonitor = () => {
 };
 
 // Process a pending transaction from the mempool
-const processPendingTransaction = async (transaction) => {
+const processPendingTransaction = async (transaction: any) => {
+  const logger = createLogger();
+
   try {
     // Identify if this is a swap transaction
     const isSwap = detectSwapTransaction(transaction);
@@ -90,7 +97,7 @@ const processPendingTransaction = async (transaction) => {
     const swapValueUsd = await estimateUsdValue(fromToken, fromAmount);
 
     // Only proceed if this is a significant swap
-    if (swapValueUsd < config.minimumSwapValue) {
+    if (swapValueUsd < config.mempool.minimumSwapValue) {
       logger.debug(`Swap value ($${swapValueUsd.toFixed(2)}) below threshold, ignoring`);
       return;
     }
@@ -106,7 +113,9 @@ const processPendingTransaction = async (transaction) => {
 };
 
 // Detect if a transaction is a swap and extract relevant information
-const detectSwapTransaction = (transaction) => {
+const detectSwapTransaction = (transaction: any): any | null => {
+  const logger = createLogger();
+
   try {
     // This function would analyze the transaction to determine if it's a swap
     // It would need to look for:
@@ -131,7 +140,7 @@ const detectSwapTransaction = (transaction) => {
     };
 
     // If not a swap, return null
-    return null;
+    // return null;
   } catch (error) {
     logger.error('Error detecting swap transaction:', error);
     return null;
@@ -139,14 +148,16 @@ const detectSwapTransaction = (transaction) => {
 };
 
 // Estimate the USD value of a token amount
-const estimateUsdValue = async (tokenMint, amount) => {
+const estimateUsdValue = async (tokenMint: string, amount: number): Promise<number> => {
+  const logger = createLogger();
+
   try {
     // In a real implementation, this would:
     // 1. Get the current price of the token in USD
     // 2. Multiply by the amount
 
     // For demonstration, we'll use a placeholder
-    const tokenPrices = {
+    const tokenPrices: {[key: string]: number} = {
       'So11111111111111111111111111111111111111112': 25, // WSOL price in USD
       'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1, // USDC price in USD
     };
@@ -160,7 +171,16 @@ const estimateUsdValue = async (tokenMint, amount) => {
 };
 
 // Scan for arbitrage opportunities after a large swap is detected
-const scanForArbitrageAfterSwap = async (fromToken, toToken, fromAmount, toAmount, dex) => {
+const scanForArbitrageAfterSwap = async (
+  fromToken: string,
+  toToken: string,
+  fromAmount: number,
+  toAmount: number,
+  dex: string
+) => {
+  const logger = createLogger();
+  const connection = new Connection(config.rpc.heliusRpcUrl, 'confirmed');
+
   try {
     logger.info(`Looking for arbitrage opportunities after ${dex} swap...`);
 
@@ -209,7 +229,7 @@ const scanForArbitrageAfterSwap = async (fromToken, toToken, fromAmount, toAmoun
       logger.info(`Profit: ${potentialProfit.toFixed(6)} ${fromToken} (${profitPercentage.toFixed(2)}%)`);
 
       // If profit is substantial, execute the arbitrage
-      if (profitPercentage > 1.0) { // More than 1% profit
+      if (profitPercentage > config.arbitrage.minimumProfitThreshold * 100) {
         logger.info(`Profitable opportunity detected! Executing arbitrage...`);
         // In a real implementation, this would execute the trade
         // executeArbitrageTrade(bestReverseRoute);
@@ -224,20 +244,10 @@ const scanForArbitrageAfterSwap = async (fromToken, toToken, fromAmount, toAmoun
   }
 };
 
-// Execute an arbitrage trade based on a detected opportunity
-const executeArbitrageTrade = async (route) => {
-  // This would implement the actual arbitrage execution
-  // It would:
-  // 1. Create and sign the transaction
-  // 2. Submit it with high priority
-  // 3. Monitor for confirmation
-
-  logger.info(`Executing arbitrage trade...`);
-  // Implementation would depend on specific DEX and trading requirements
-};
-
 // Monitor Solana DEX programs for transaction activity
 const monitorDexPrograms = async () => {
+  const logger = createLogger();
+
   // List of common DEX program IDs to monitor
   const dexProgramIds = [
     'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', // Jupiter Aggregator v6
@@ -253,38 +263,42 @@ const monitorDexPrograms = async () => {
   // to these program accounts to detect transaction activity
 };
 
-// Start the arbitrage bot
-const startMempoolMonitor = async () => {
+// Start the mempool monitor
+export const startMempoolMonitor = async () => {
+  const logger = createLogger();
+
+  if (!config.mempool.enabled) {
+    logger.info('Mempool monitoring is disabled in config. Skipping initialization.');
+    return;
+  }
+
   logger.info('Starting Solana mempool monitor for arbitrage opportunities...');
 
   try {
     // Setup WebSocket connection to monitor mempool
     const ws = setupMempoolMonitor();
 
+    if (!ws) {
+      logger.error('Failed to set up WebSocket for mempool monitoring');
+      return;
+    }
+
     // Also monitor DEX programs for activity
     await monitorDexPrograms();
 
     // Ensure graceful shutdown
     process.on('SIGINT', () => {
-      ws.close();
+      if (ws) ws.close();
       logger.info('Mempool monitor stopped');
-      process.exit(0);
     });
 
   } catch (error) {
     logger.error('Error starting mempool monitor:', error);
-    process.exit(1);
   }
 };
 
 // Export the functions
 export {
-  startMempoolMonitor,
   processPendingTransaction,
   scanForArbitrageAfterSwap,
 };
-
-// Start the monitor if this is the main module
-if (import.meta.main) {
-  startMempoolMonitor();
-}

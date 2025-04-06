@@ -1,32 +1,32 @@
 // arbitrage-bot.ts - Solana Arbitrage Bot with Paper Trading
 // Cleaned version without flash loan code and unnecessary imports
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
-import { Jupiter, RouteInfo } from '@jup-ag/core';
-import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { TokenListProvider } from '@solana/spl-token-registry';
-import { config } from './config';
+import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { Jupiter } from '@jup-ag/core';
 import * as fs from 'fs';
+import { config } from './config';
+import { PaperTrading } from './paper-trading';
 
 // Initialize logger
 const createLogger = () => {
   return {
-    debug: (...args) => config.logLevel === 'debug' && console.debug(new Date().toISOString(), ...args),
-    info: (...args) => ['debug', 'info'].includes(config.logLevel) && console.info(new Date().toISOString(), ...args),
-    warn: (...args) => ['debug', 'info', 'warn'].includes(config.logLevel) && console.warn(new Date().toISOString(), ...args),
-    error: (...args) => console.error(new Date().toISOString(), ...args),
+    debug: (...args: any[]) => config.monitoring.logLevel === 'debug' && console.debug(new Date().toISOString(), ...args),
+    info: (...args: any[]) => ['debug', 'info'].includes(config.monitoring.logLevel) && console.info(new Date().toISOString(), ...args),
+    warn: (...args: any[]) => ['debug', 'info', 'warn'].includes(config.monitoring.logLevel) && console.warn(new Date().toISOString(), ...args),
+    error: (...args: any[]) => console.error(new Date().toISOString(), ...args),
   };
 };
 
 // Load token list information
 async function loadTokenList() {
   try {
+    const { TokenListProvider } = await import('@solana/spl-token-registry');
     const tokenListProvider = new TokenListProvider();
     const tokenList = await tokenListProvider.resolve();
     const tokenListContainer = tokenList.getList();
 
     // Create a map of token address to token info
-    const tokenMap = tokenListContainer.reduce((acc, token) => {
+    const tokenMap = tokenListContainer.reduce((acc: any, token: any) => {
       acc[token.address] = token;
       return acc;
     }, {});
@@ -38,13 +38,13 @@ async function loadTokenList() {
     return {
       'So11111111111111111111111111111111111111112': { symbol: 'SOL', name: 'Solana', decimals: 9 },
       'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', name: 'USD Coin', decimals: 6 },
-      // Add other essential tokens
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': { symbol: 'USDT', name: 'USDT', decimals: 6 },
     };
   }
 }
 
 // Setup Jupiter for best swap routes
-async function setupJupiter(connection, wallet) {
+async function setupJupiter(connection: Connection, wallet: PublicKey) {
   try {
     const jupiter = await Jupiter.load({
       connection,
@@ -59,21 +59,16 @@ async function setupJupiter(connection, wallet) {
 }
 
 // Function to generate potential arbitrage routes
-function generateArbitrageRoutes(tokenMap) {
+function generateArbitrageRoutes(tokenMap: any) {
   // Get major tokens for triangle arbitrage
-  const majorTokens = [
-    'So11111111111111111111111111111111111111112', // WSOL
-    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
-    // Add other major tokens here
-  ];
+  const majorTokens = config.tokens.basePairs;
 
   // Get a selection of other tokens with good liquidity
   // In a real implementation, you would filter based on volume or liquidity
-  const secondaryTokens = Object.keys(tokenMap).slice(0, 20);
+  const secondaryTokens = Object.keys(tokenMap).slice(0, config.tokens.maxTokensToScan);
 
   // Generate triangle arbitrage routes
-  const routes = [];
+  const routes: string[][] = [];
 
   // Always start with WSOL for simplicity
   const startToken = 'So11111111111111111111111111111111111111112'; // WSOL
@@ -84,6 +79,7 @@ function generateArbitrageRoutes(tokenMap) {
 
     for (const token2 of secondaryTokens) {
       if (token2 === startToken || token2 === token1) continue;
+      if (config.tokens.tokenBlacklist.includes(token2)) continue;
 
       routes.push([startToken, token1, token2, startToken]);
     }
@@ -94,7 +90,7 @@ function generateArbitrageRoutes(tokenMap) {
 
 // Function to find arbitrage opportunities
 async function findArbitrageOpportunities(
-  jupiter: Jupiter,
+  jupiter: any,
   routes: string[][],
   tokenMap: any,
   startingAmount: number,
@@ -125,7 +121,7 @@ async function findArbitrageOpportunities(
           inputMint: new PublicKey(inputMint),
           outputMint: new PublicKey(outputMint),
           amount: inputAmount,
-          slippageBps: 50, // 0.5%
+          slippageBps: config.arbitrage.slippageTolerance * 100, // Convert percentage to basis points
         });
 
         if (!routeInfo.routesInfos || routeInfo.routesInfos.length === 0) {
@@ -169,7 +165,7 @@ async function findArbitrageOpportunities(
           timeStamp: Date.now(),
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.debug(`Error simulating route ${route.join(' -> ')}:`, error.message);
       continue;
     }
@@ -180,27 +176,28 @@ async function findArbitrageOpportunities(
 
 // Execute the arbitrage trade (or simulate with paper trading)
 async function executeArbitrage(
-  jupiter: Jupiter,
+  jupiter: any,
   opportunity: any,
   tokenMap: any,
-  logger: any
+  logger: any,
+  paperTradingInstance?: any
 ) {
   try {
     logger.info('Executing arbitrage trade...');
-    logger.info(`Route: ${opportunity.route.map(t => tokenMap[t]?.symbol || t).join(' -> ')}`);
+    logger.info(`Route: ${opportunity.route.map((t: string) => tokenMap[t]?.symbol || t).join(' -> ')}`);
     logger.info(`Expected profit: ${opportunity.profit.toFixed(6)} SOL (${opportunity.profitPercentage.toFixed(2)}%)`);
 
     // Check if opportunity is still fresh
     const timeSinceDiscovery = Date.now() - opportunity.timeStamp;
-    if (timeSinceDiscovery > 3000) { // 3 seconds
+    if (timeSinceDiscovery > config.arbitrage.routeTimeout) {
       logger.warn(`Opportunity expired (${timeSinceDiscovery}ms old). Recalculating...`);
       return { success: false, reason: 'expired' };
     }
 
     // Paper trading mode - delegate to paper trading handler
-    if (config.paperTradingMode && global.paperTrading) {
+    if (config.paperTrading.enabled && paperTradingInstance) {
       logger.info('Paper trading mode active - simulating trade execution');
-      return await global.paperTrading.executeTrade(opportunity, jupiter);
+      return await paperTradingInstance.executeTrade(opportunity, jupiter);
     }
 
     // Real trading execution
@@ -233,7 +230,7 @@ async function executeArbitrage(
       profit: opportunity.profit,
       profitPercentage: opportunity.profitPercentage,
     };
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Error executing arbitrage:', error);
     return {
       success: false,
@@ -282,8 +279,8 @@ function loadWallet(privateKeyPath: string): Keypair {
 }
 
 // Main arbitrage monitoring function
-export async function monitorArbitrageOpportunities(connection: Connection) {
-  const logger = createLogger(config);
+export async function monitorArbitrageOpportunities(connection: Connection, paperTradingInstance?: any) {
+  const logger = createLogger();
 
   try {
     // Load token information
@@ -291,9 +288,9 @@ export async function monitorArbitrageOpportunities(connection: Connection) {
     logger.info(`Loaded information for ${Object.keys(tokenMap).length} tokens`);
 
     // Load wallet or use dummy wallet for paper trading
-    const walletPublicKey = config.paperTradingMode
+    const walletPublicKey = config.paperTrading.enabled
       ? new PublicKey('11111111111111111111111111111111') // Dummy wallet for paper trading
-      : loadWallet(config.privateKeyPath).publicKey; // Real wallet for actual trades
+      : loadWallet(config.wallet.privateKeyPath).publicKey; // Real wallet for actual trades
 
     // Setup Jupiter instance
     const jupiter = await setupJupiter(connection, walletPublicKey);
@@ -304,18 +301,19 @@ export async function monitorArbitrageOpportunities(connection: Connection) {
     logger.info(`Generated ${routes.length} potential arbitrage routes`);
 
     // Get available balance
-    const availableBalance = config.paperTradingMode
-      ? (global.paperTrading?.getBalance(config.tokens.WSOL) || 10) // Use paper trading balance
-      : await getTokenBalance(connection, config.tokens.WSOL, walletPublicKey);
+    const wsol = 'So11111111111111111111111111111111111111112';
+    const availableBalance = config.paperTrading.enabled && paperTradingInstance
+      ? (paperTradingInstance.getBalance(wsol) || 10) // Use paper trading balance
+      : await getTokenBalance(connection, wsol, walletPublicKey);
 
     logger.info(`Available WSOL balance: ${availableBalance}`);
 
     // Determine trade size (either available balance or max trade size, whichever is smaller)
     // Also reserve some SOL for gas fees
-    const tradeSize = Math.min(availableBalance - config.gasBuffer, config.maxTradeSize);
+    const tradeSize = Math.min(availableBalance - config.wallet.gasBuffer, config.arbitrage.maxTradeSize);
 
     if (tradeSize <= 0) {
-      logger.error(`Insufficient balance to execute trades. Need at least ${config.gasBuffer} SOL for gas fees.`);
+      logger.error(`Insufficient balance to execute trades. Need at least ${config.wallet.gasBuffer} SOL for gas fees.`);
       return null;
     }
 
@@ -330,17 +328,17 @@ export async function monitorArbitrageOpportunities(connection: Connection) {
     }
 
     logger.info(`Found profitable opportunity!`);
-    logger.info(`Route: ${opportunity.route.map(t => tokenMap[t]?.symbol || t).join(' -> ')}`);
+    logger.info(`Route: ${opportunity.route.map((t: string) => tokenMap[t]?.symbol || t).join(' -> ')}`);
     logger.info(`Expected profit: ${opportunity.profit.toFixed(6)} SOL (${opportunity.profitPercentage.toFixed(2)}%)`);
 
     // Check if opportunity meets minimum profit threshold
-    if (opportunity.profitPercentage < config.minimumProfitThreshold * 100) {
-      logger.info(`Opportunity profitability (${opportunity.profitPercentage.toFixed(2)}%) below threshold (${config.minimumProfitThreshold * 100}%). Skipping execution.`);
+    if (opportunity.profitPercentage < config.arbitrage.minimumProfitThreshold * 100) {
+      logger.info(`Opportunity profitability (${opportunity.profitPercentage.toFixed(2)}%) below threshold (${config.arbitrage.minimumProfitThreshold * 100}%). Skipping execution.`);
       return null;
     }
 
     // Execute the arbitrage (real or paper)
-    return await executeArbitrage(jupiter, opportunity, tokenMap, logger);
+    return await executeArbitrage(jupiter, opportunity, tokenMap, logger, paperTradingInstance);
 
   } catch (error) {
     logger.error('Error monitoring arbitrage opportunities:', error);
@@ -465,7 +463,7 @@ export async function simulateArbitrage(
           });
         }
 
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error simulating route:`, error.message);
       }
     }
@@ -481,7 +479,7 @@ export async function simulateArbitrage(
   } catch (error) {
     console.error('Error in arbitrage simulation:', error);
     return {
-      error: error.message,
+      error: (error as Error).message,
       simulatedRoutes: 0,
       profitableRoutes: []
     };
@@ -490,16 +488,57 @@ export async function simulateArbitrage(
 
 // Main function to start the arbitrage bot
 export function startArbitrageBot() {
-  const logger = createLogger(config);
+  const logger = createLogger();
   logger.info('Starting Solana arbitrage bot with Helius RPC...');
 
   // Paper trading notification
-  if (config.paperTradingMode) {
+  if (config.paperTrading.enabled) {
     logger.info('PAPER TRADING MODE ACTIVE - NO REAL TRANSACTIONS WILL BE EXECUTED');
   }
 
   // Set up connection
   const connection = new Connection(config.rpc.heliusRpcUrl, 'confirmed');
+
+  // Initialize paper trading if enabled
+  let paperTradingInstance;
+  if (config.paperTrading.enabled) {
+    // Load token information for paper trading
+    import('@solana/spl-token-registry').then(({ TokenListProvider }) => {
+      const tokenListProvider = new TokenListProvider();
+      tokenListProvider.resolve().then(tokenList => {
+        const tokenListContainer = tokenList.getList();
+
+        // Create token info map for paper trading
+        const tokenInfo: any = {};
+        tokenListContainer.forEach((token: any) => {
+          tokenInfo[token.address] = {
+            mint: token.address,
+            symbol: token.symbol,
+            name: token.name,
+            decimals: token.decimals,
+          };
+        });
+
+        paperTradingInstance = new PaperTrading(
+          config.paperTrading,
+          connection,
+          tokenInfo,
+          logger
+        );
+
+        // Start monitoring after paper trading is initialized
+        startMonitoring(connection, paperTradingInstance);
+      });
+    });
+  } else {
+    // Start monitoring without paper trading
+    startMonitoring(connection);
+  }
+}
+
+// Function to start the monitoring loop
+function startMonitoring(connection: Connection, paperTradingInstance?: any) {
+  const logger = createLogger();
 
   // Main monitoring loop
   let runCount = 0;
@@ -512,7 +551,7 @@ export function startArbitrageBot() {
     logger.info(`Scan #${runCount} - Starting arbitrage opportunity search`);
 
     try {
-      const result = await monitorArbitrageOpportunities(config, connection);
+      const result = await monitorArbitrageOpportunities(connection, paperTradingInstance);
 
       // Process result
       if (result && result.success) {
@@ -527,7 +566,7 @@ export function startArbitrageBot() {
     } catch (error) {
       logger.error('Error in monitoring cycle:', error);
     }
-  }, config.monitoringInterval);
+  }, config.arbitrage.monitoringInterval);
 
   // Ensure we can stop the bot gracefully
   process.on('SIGINT', () => {
@@ -539,8 +578,8 @@ export function startArbitrageBot() {
     logger.info(`- Success rate: ${(successfulTrades / runCount * 100).toFixed(2)}%`);
 
     // Generate paper trading report if enabled
-    if (config.paperTradingMode && global.paperTrading) {
-      const reportPath = global.paperTrading.saveReport();
+    if (config.paperTrading.enabled && paperTradingInstance) {
+      const reportPath = paperTradingInstance.saveReport();
       logger.info(`Paper trading final report saved to ${reportPath}`);
     }
 
@@ -555,8 +594,3 @@ export default {
   simulateArbitrage,
   startArbitrageBot,
 };
-
-// Start the bot if this is the main module
-if (import.meta.main) {
-  startArbitrageBot();
-}

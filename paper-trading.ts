@@ -1,6 +1,6 @@
 // paper-trading.ts - Paper Trading implementation for Solana Arbitrage Bot
 import { Connection, PublicKey } from '@solana/web3.js';
-import { Jupiter, RouteInfo } from '@jup-ag/core';
+import { Jupiter } from '@jup-ag/core';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -15,6 +15,7 @@ interface PaperTradingConfig {
   recordDirectory: string; // Directory to store trade records
   successRate: number; // Simulated success rate (0-1) to account for failed transactions
   latencyMs: number; // Simulated latency in milliseconds
+  reportInterval: number; // Interval for generating reports in milliseconds
 }
 
 // Trade record type
@@ -111,7 +112,7 @@ export class PaperTrading {
       profitPercentage: number;
     },
     jupiter: Jupiter
-  ): Promise<TradeRecord> {
+  ): Promise<any> {
     // Create a new trade record
     const now = Date.now();
 
@@ -175,6 +176,13 @@ export class PaperTrading {
       ];
       tradeRecord.failureReason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
       this.logger.warn(`Paper trade failed: ${tradeRecord.failureReason}`);
+
+      return {
+        success: false,
+        reason: tradeRecord.failureReason,
+        profit: 0,
+        profitPercentage: 0
+      };
     } else {
       // Update balances if trade is successful
       // Deduct initial amount
@@ -200,11 +208,15 @@ export class PaperTrading {
     // Update balance history
     this.recordBalance();
 
-    return tradeRecord;
+    return {
+      success: true,
+      profit: tradeRecord.profit,
+      profitPercentage: tradeRecord.profitPercentage
+    };
   }
 
   // Record current balance
-  private async recordBalance() {
+  private recordBalance() {
     // Get the total value in USD (would require price feeds in a real implementation)
     // This is a simplified version
     let totalValueUSD = 0;
@@ -216,7 +228,7 @@ export class PaperTrading {
 
         // This would normally use price feeds or DEX data
         // For simplicity, we're using placeholder values
-        const placeholder_prices = {
+        const placeholder_prices: {[key: string]: number} = {
           'So11111111111111111111111111111111111111112': 25, // WSOL at $25
           'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1, // USDC at $1
         };
@@ -368,7 +380,7 @@ export class PaperTrading {
   }
 
   // Save full report to file
-  saveReport() {
+  saveReport(): string | null {
     try {
       const report = this.generateReport();
       const filename = path.join(
@@ -382,5 +394,25 @@ export class PaperTrading {
       this.logger.error('Error saving report:', error);
       return null;
     }
+  }
+
+  // Reset paper trading data
+  resetData(initialBalances?: {[tokenMint: string]: number}): void {
+    // Reset balances to initial or provided balances
+    this.balances = initialBalances ? { ...initialBalances } : { ...this.config.initialBalance };
+
+    // Clear history
+    this.tradeHistory = [];
+    this.balanceHistory = [];
+
+    // Record initial balance
+    this.recordBalance();
+
+    this.logger.info('Paper trading data reset');
+    this.logger.info('Initial balances:');
+    Object.entries(this.balances).forEach(([mint, amount]) => {
+      const symbol = this.tokenInfo[mint]?.symbol || mint.slice(0, 8) + '...';
+      this.logger.info(`- ${symbol}: ${amount}`);
+    });
   }
 }
