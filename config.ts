@@ -87,15 +87,19 @@ export interface ArbConfig {
     reportDir: string;
     tokenCacheTime: number;
     requestInterval: number;
-    birdeyeApiKey?: string;
     maxRoutesPerScan: number;
   };
+
+  birdeyeApiKey: string;
 }
 
 const HELIUS_KEY = process.env.HELIUS_KEY || '43cc204e-ea49-4017-8623-123f776557de'
+const BIRDEYE_KEY = process.env.BIRDEYE_KEY || '25c07cf2da2b4c01b3bdfabf8ffa8974'
 
 // Direct configuration
 export const config: ArbConfig = {
+  birdeyeApiKey: BIRDEYE_KEY,
+
   rpc: {
     heliusRpcUrl: 'https://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
     heliusWsUrl: 'wss://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY,
@@ -189,7 +193,6 @@ export const config: ArbConfig = {
     tokenCacheTime: 86400000, // 24 hours in milliseconds
     requestInterval: 200, // 200ms between requests to avoid rate limits
     maxRoutesPerScan: 100, // Maximum routes to scan per iteration
-    birdeyeApiKey: process.env.BIRDEYE_API_KEY || '', // Optional Birdeye API key for token data
   },
 };
 

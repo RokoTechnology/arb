@@ -39,7 +39,7 @@ export class TriangularScanner {
 
     // Initialize token fetcher
     this.tokenFetcher = new BirdeyeFetcher(
-      config.apis.birdeyeApiKey || config.triangleScanner.birdeyeApiKey || '',
+      config.birdeyeApiKey,
       path.join(config.triangleScanner.reportDir, 'cache'),
       config.triangleScanner.tokenCacheTime
     );
