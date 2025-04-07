@@ -1,81 +1,91 @@
-// jupiter-api.ts - Wrapper for Jupiter API
+// jupiter-api.ts - Fixed Jupiter API wrapper with better error handling
+
 import { PublicKey } from '@solana/web3.js';
+import { config } from './config';
 
-// Interface for Jupiter API
-export interface JupiterAPI {
-  computeRoutes(params: ComputeRoutesParams): Promise<ComputeRoutesResponse>;
-  exchange(params: ExchangeParams): Promise<ExchangeResponse>;
-}
-
-// Parameter types
-interface ComputeRoutesParams {
+// Interface for Jupiter API parameters
+export interface JupiterRouteParams {
   inputMint: PublicKey;
   outputMint: PublicKey;
-  amount: number | string | bigint;
+  amount: number;
   slippageBps?: number;
   feeBps?: number;
   onlyDirectRoutes?: boolean;
-  maxAccounts?: number;
 }
 
-interface ExchangeParams {
+// Interface for Jupiter Exchange parameters
+export interface JupiterExchangeParams {
+  userPublicKey?: string;
   routeInfo: any;
-  userPublicKey?: PublicKey;
 }
 
-// Response types
-interface ComputeRoutesResponse {
-  routesInfos: RouteInfo[];
-  contextSlot?: number;
+// Jupiter API wrapper
+export interface JupiterAPI {
+  computeRoutes(params: JupiterRouteParams): Promise<any>;
+  exchange(params: JupiterExchangeParams): Promise<any>;
+  getQuote(params: JupiterRouteParams): Promise<any>;
 }
 
-interface RouteInfo {
-  outAmount: bigint;
-  marketInfos: any[];
-  amount: bigint;
-  slippageBps: number;
-  otherAmountThreshold: bigint;
-  swapMode: string;
-  priceImpactPct: number;
-  [key: string]: any;
-}
+// Set up the Jupiter API
+export function setupJupiterAPI(requestsPerSecond: number = 1): JupiterAPI {
+  // Base Jupiter API V6 URL
+  const jupiterBaseUrl = 'https://quote-api.jup.ag/v6';
 
-interface ExchangeResponse {
-  txid?: string;
-  error?: string;
-  [key: string]: any;
-}
+  // Track request timestamps to implement rate limiting
+  const requestHistory: number[] = [];
+  const historyLimit = 100; // How many requests to track in history
 
-// Setup Jupiter API with rate limiting
-export function setupJupiterAPI(requestsPerSecond = 5): JupiterAPI {
-  // Basic rate limiting
-  const minInterval = 1000 / requestsPerSecond;
-  let lastRequestTime = 0;
-
-  const getRateLimit = async () => {
+  // Function to ensure we don't exceed rate limits
+  async function rateLimitRequest() {
     const now = Date.now();
-    const elapsed = now - lastRequestTime;
 
-    if (elapsed < minInterval) {
-      await new Promise(resolve => setTimeout(resolve, minInterval - elapsed));
+    // Clean old requests from history (older than 1 minute)
+    const recentRequests = requestHistory.filter(time => now - time < 60000);
+    requestHistory.length = 0;
+    requestHistory.push(...recentRequests);
+
+    // Check if we need to throttle
+    if (requestHistory.length > 0) {
+      const requestsInLastSecond = requestHistory.filter(time => now - time < 1000).length;
+
+      if (requestsInLastSecond >= requestsPerSecond) {
+        // Need to wait before making another request
+        const oldestInWindow = Math.min(...requestHistory.filter(time => now - time < 1000));
+        const timeToWait = 1000 - (now - oldestInWindow) + 100; // Add 100ms buffer
+
+        // Wait the required time
+        if (timeToWait > 0) {
+          await new Promise(resolve => setTimeout(resolve, timeToWait));
+        }
+      }
     }
 
-    lastRequestTime = Date.now();
-  };
+    // Add current request to history
+    requestHistory.push(Date.now());
 
-  // Create Jupiter API instance
+    // Keep history size limited
+    if (requestHistory.length > historyLimit) {
+      requestHistory.splice(0, requestHistory.length - historyLimit);
+    }
+  }
+
+  // Implement Jupiter API functions
   return {
-    async computeRoutes(params: ComputeRoutesParams): Promise<ComputeRoutesResponse> {
-      await getRateLimit();
-
+    // Compute possible routes
+    computeRoutes: async (params: JupiterRouteParams) => {
       try {
-        // Build API URL with query parameters
-        const url = new URL('https://quote-api.jup.ag/v6/quote');
+        // Apply rate limiting
+        await rateLimitRequest();
 
+        // Build API URL with query parameters
+        const url = new URL(`${jupiterBaseUrl}/quote`);
+
+        // Add required parameters
         url.searchParams.append('inputMint', params.inputMint.toString());
         url.searchParams.append('outputMint', params.outputMint.toString());
         url.searchParams.append('amount', params.amount.toString());
 
+        // Add optional parameters if provided
         if (params.slippageBps !== undefined) {
           url.searchParams.append('slippageBps', params.slippageBps.toString());
         }
@@ -88,61 +98,176 @@ export function setupJupiterAPI(requestsPerSecond = 5): JupiterAPI {
           url.searchParams.append('onlyDirectRoutes', params.onlyDirectRoutes.toString());
         }
 
-        if (params.maxAccounts !== undefined) {
-          url.searchParams.append('maxAccounts', params.maxAccounts.toString());
+        // Add debugging to see the exact URL being requested
+        console.debug(`JUPITER API REQUEST: ${url.toString()}`);
+
+        // Make API request with proper timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        try {
+          const response = await fetch(url.toString(), {
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          // Clear timeout since request completed
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            // Get more detailed error information
+            let errorDetail = '';
+            try {
+              const errorBody = await response.text();
+              errorDetail = ` - ${errorBody}`;
+            } catch {
+              // Ignore error parsing failures
+            }
+
+            throw new Error(`Jupiter API error: ${response.status} ${response.statusText}${errorDetail}`);
+          }
+
+          // Parse response as JSON
+          return await response.json();
+        } catch (error: any) {
+          // Check if this was a timeout
+          if (error.name === 'AbortError') {
+            throw new Error('Jupiter API request timed out after 10 seconds');
+          }
+          throw error;
         }
-
-        // Make API request
-        const response = await fetch(url.toString());
-
-        if (!response.ok) {
-          throw new Error(`Jupiter API error: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Handle different possible response structures
-        const routes = data.data || data.routes || [];
-
-        if (!Array.isArray(routes)) {
-          console.error('Unexpected response format:', data);
-          return { routesInfos: [] };
-        }
-
-        // Transform API response to expected format
-        return {
-          routesInfos: routes.map((route: any) => ({
-            ...route,
-            outAmount: BigInt(route.outAmount || 0),
-            amount: BigInt(route.inAmount || route.amount || 0),
-            otherAmountThreshold: BigInt(route.otherAmountThreshold || 0),
-          })),
-          contextSlot: data.contextSlot,
-        };
       } catch (error) {
         console.error('Error computing routes:', error);
+        // Return empty route info instead of throwing
         return { routesInfos: [] };
       }
     },
 
-    async exchange(params: ExchangeParams): Promise<ExchangeResponse> {
-      await getRateLimit();
-
+    // Get quote
+    getQuote: async (params: JupiterRouteParams) => {
       try {
-        // In a real implementation, this would call the Jupiter swap API
-        // For paper trading/simulation, we'll just return a mock response
+        // Apply rate limiting
+        await rateLimitRequest();
 
-        // Simulate network latency
-        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+        // Build API URL with query parameters
+        const url = new URL(`${jupiterBaseUrl}/quote`);
 
-        // Generate a fake transaction ID
-        const txid = 'sim' + Math.random().toString(36).substring(2, 15);
+        // Add required parameters
+        url.searchParams.append('inputMint', params.inputMint.toString());
+        url.searchParams.append('outputMint', params.outputMint.toString());
+        url.searchParams.append('amount', params.amount.toString());
 
-        return { txid };
+        // Add optional parameters if provided
+        if (params.slippageBps !== undefined) {
+          url.searchParams.append('slippageBps', params.slippageBps.toString());
+        }
+
+        if (params.feeBps !== undefined) {
+          url.searchParams.append('feeBps', params.feeBps.toString());
+        }
+
+        if (params.onlyDirectRoutes !== undefined) {
+          url.searchParams.append('onlyDirectRoutes', params.onlyDirectRoutes.toString());
+        }
+
+        // Make API request with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const response = await fetch(url.toString(), {
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            // Get more detailed error information
+            let errorDetail = '';
+            try {
+              const errorBody = await response.text();
+              errorDetail = ` - ${errorBody}`;
+            } catch {
+              // Ignore error parsing failures
+            }
+
+            throw new Error(`Jupiter API error: ${response.status} ${response.statusText}${errorDetail}`);
+          }
+
+          return await response.json();
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            throw new Error('Jupiter API request timed out after 10 seconds');
+          }
+          throw error;
+        }
       } catch (error) {
-        console.error('Error executing exchange:', error);
-        return { error: (error as Error).message };
+        console.error('Error getting quote:', error);
+        throw error;
       }
     },
+
+    // Exchange tokens
+    exchange: async (params: JupiterExchangeParams) => {
+      try {
+        // Apply rate limiting
+        await rateLimitRequest();
+
+        // Build API URL
+        const url = new URL(`${jupiterBaseUrl}/swap`);
+
+        // Prepare request body
+        const body = {
+          userPublicKey: params.userPublicKey,
+          route: params.routeInfo,
+          computeUnitPriceMicroLamports: 1000 // Set compute unit price for priority
+        };
+
+        // Make API request with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // Longer timeout for swaps
+
+        try {
+          const response = await fetch(url.toString(), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            // Get more detailed error information
+            let errorDetail = '';
+            try {
+              const errorBody = await response.text();
+              errorDetail = ` - ${errorBody}`;
+            } catch {
+              // Ignore error parsing failures
+            }
+
+            throw new Error(`Jupiter swap API error: ${response.status} ${response.statusText}${errorDetail}`);
+          }
+
+          return await response.json();
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            throw new Error('Jupiter swap API request timed out after 20 seconds');
+          }
+          throw error;
+        }
+      } catch (error) {
+        console.error('Error executing exchange:', error);
+        throw error;
+      }
+    }
   };
 }

@@ -112,11 +112,50 @@ export const config: ArbConfig = {
     gasBuffer: 0.01, // 0.01 SOL
   },
 
+  tokenFilter: {
+    // Only include tokens that have been verified
+    verifiedOnly: true,
+
+    // Minimum liquidity required in USD (estimated)
+    liquidityThreshold: 10000, // $10K
+
+    // Specifically excluded token addresses (even if they pass other filters)
+    excludedTokens: [
+      // Add known problematic tokens here
+      // Add any other tokens causing issues
+    ],
+
+    // Tokens to explicitly include, even if they would normally be filtered out
+    // These are high-volume "pump" tokens or other tokens that might be filtered
+    includedTokens: [
+      // Popular meme coins
+      // Add any other tokens you want to include
+    ],
+
+    // Maximum number of tokens to include in scanning
+    maxTokensToScan: 50
+  },
+
   arbitrage: {
-    minimumProfitThreshold: parseFloat(process.env.MIN_PROFIT_THRESHOLD || '0.0001'), // 0.01%
-    maxTradeSize: parseFloat(process.env.MAX_TRADE_SIZE || '10'), // 10 SOL
+    // The token to use as the source for all arbitrage routes
+    sourceToken: 'So11111111111111111111111111111111111111112', // SOL
+
+    // Minimum profit percentage required to execute (as decimal, e.g., 0.01 = 1%)
+    minimumProfitThreshold: 0.0005, // 0.05%
+
+    // Maximum trade size in SOL (or source token)
+    maxTradeSize: 100, // 10 SOL
+
+    // Time in ms before an opportunity is considered expired
+    routeTimeout: 10000, // 10 seconds
+
+    // How often to scan for opportunities (in milliseconds)
+    scanIntervalMs: 5000, // 5 seconds
+
+    // Whether to scan for more complex 4-hop routes (computationally expensive)
+    findFourHopRoutes: true,
+
     slippageTolerance: 0.01, // 0.01%
-    routeTimeout: 3000, // 3 seconds
     monitoringInterval: parseInt(process.env.MONITORING_INTERVAL || '60000'), // 60 seconds
     maxConcurrentScans: 2,
   },
