@@ -93,8 +93,8 @@ export interface ArbConfig {
   birdeyeApiKey: string;
 }
 
-const HELIUS_KEY = process.env.HELIUS_KEY || '43cc204e-ea49-4017-8623-123f776557de'
-const BIRDEYE_KEY = process.env.BIRDEYE_KEY || '25c07cf2da2b4c01b3bdfabf8ffa8974'
+const HELIUS_KEY = process.env.HELIUS_KEY || 'NOT_SET'
+const BIRDEYE_KEY = process.env.BIRDEYE_KEY || 'NOT_SET'
 
 // Direct configuration
 export const config: ArbConfig = {
